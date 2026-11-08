@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plume — Assistant d'écriture & Correcteur IA pour Apple Mail (macOS)</title>
+  <link rel="icon" type="image/png" href="logo.png" />
+  <style>
+    :root {
+      --primary: #4F46E5;
+      --primary-hover: #4338CA;
+      --primary-light: #EEF2FF;
+      --bg: #F8FAFC;
+      --card: #FFFFFF;
+      --text: #0F172A;
+      --muted: #475569;
+      --border: #E2E8F0;
+      --red: #E53845;
+      --blue: #2980F2;
+      --amber: #F0941A;
+      --green: #16A34A;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 1.25rem;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .brand img {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+    .nav-links a:hover { color: var(--primary); }
+    .lang-switch {
+      display: inline-flex;
+      background: var(--primary-light);
+      border-radius: 999px;
+      padding: 3px;
+      border: 1px solid #C7D2FE;
+    }
+    .lang-btn {
+      border: none;
+      background: transparent;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .lang-btn.active {
+      background: var(--primary);
+      color: #fff;
+    }
+    .hero {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 72px 24px 40px;
+      text-align: center;
+    }
+    .hero-logo {
+      width: 112px;
+      height: 112px;
+      margin-bottom: 20px;
+      filter: drop-shadow(0 14px 28px rgba(79, 70, 229, 0.25));
+    }
+    .badge {
+      display: inline-block;
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 0.82rem;
+      padding: 6px 14px;
+      border-radius: 999px;
+      margin-bottom: 18px;
+      border: 1px solid #C7D2FE;
+    }
+    h1 {
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+    }
+    .subtitle {
+      max-width: 740px;
+      margin: 0 auto 32px;
+      font-size: 1.18rem;
+      color: var(--muted);
+    }
+    .cta-group {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 13px 24px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 1rem;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(79, 70, 229, 0.28);
+    }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-secondary {
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
+    section {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+    h2 {
+      font-size: 1.85rem;
+      font-weight: 800;
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+    .section-lead {
+      color: var(--muted);
+      margin-bottom: 28px;
+      font-size: 1.05rem;
+    }
+    .screenshots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 24px;
+      margin-top: 16px;
+    }
+    .screenshot-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+      text-align: center;
+    }
+    .screenshot-card img {
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      display: block;
+      margin-bottom: 12px;
+    }
+    .screenshot-card h3 {
+      font-size: 1.08rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .screenshot-card p {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 22px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+    }
+    .card h3 {
+      font-size: 1.15rem;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card p, .card li {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .card ul, .card ol {
+      padding-left: 20px;
+      margin-top: 8px;
+    }
+    .card li { margin-bottom: 6px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    th, td {
+      padding: 14px 18px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.95rem;
+    }
+    th {
+      background: #F1F5F9;
+      font-weight: 700;
+    }
+    .status-ok { color: var(--green); font-weight: 700; }
+    code, kbd {
+      background: #F1F5F9;
+      padding: 2px 6px;
+      border-radius: 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.88em;
+    }
+    footer {
+      text-align: center;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 40px;
+    }
+    [data-lang="en"] { display: none; }
+    body.lang-en [data-lang="fr"] { display: none; }
+    body.lang-en [data-lang="en"] { display: block; }
+    span[data-lang="en"], a[data-lang="en"] { display: none; }
+    body.lang-en span[data-lang="fr"], body.lang-en a[data-lang="fr"] { display: none; }
+    body.lang-en span[data-lang="en"], body.lang-en a[data-lang="en"] { display: inline-flex; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="nav-container">
+      <a href="#" class="brand">
+        <img src="logo.png" alt="Plume Logo" />
+        <span>Plume</span>
+      </a>
+      <div class="nav-links">
+        <a href="#screenshots"><span data-lang="fr">Aperçu</span><span data-lang="en">Screenshots</span></a>
+        <a href="#features"><span data-lang="fr">Fonctionnalités</span><span data-lang="en">Features</span></a>
+        <a href="#manual"><span data-lang="fr">Manuel Utilisateur</span><span data-lang="en">User Manual</span></a>
+        <a href="#compatibility"><span data-lang="fr">Compatibilité macOS</span><span data-lang="en">macOS Compatibility</span></a>
+        <a href="https://github.com/pschaus/plume" target="_blank">GitHub</a>
+        <div class="lang-switch">
+          <button class="lang-btn active" id="btn-fr" onclick="setLang('fr')">🇫🇷 FR</button>
+          <button class="lang-btn" id="btn-en" onclick="setLang('en')">🇬🇧 EN</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <div class="hero">
+    <img src="logo.png" alt="Plume Icon" class="hero-logo" />
+    <div>
+      <span class="badge" data-lang="fr">🪶 Correcteur IA natif macOS pour Apple Mail · Open Source (MIT)</span>
+      <span class="badge" data-lang="en">🪶 Native macOS AI Spell & Grammar Assistant for Apple Mail · Open Source (MIT)</span>
+    </div>
+
+    <div data-lang="fr">
+      <h1>Écrivez des e-mails sans fautes dans Apple Mail.</h1>
+      <p class="subtitle">
+        <strong>Plume</strong> est un assistant natif de correction orthographique, grammaticale et stylistique intégré à Apple Mail sur macOS. Utilisez vos propres clés API (<strong>Google Gemini, Claude, OpenAI, OpenRouter</strong>) ou un modèle 100 % local et gratuit via <strong>Ollama</strong>.
+      </p>
+    </div>
+
+    <div data-lang="en">
+      <h1>Write flawless emails directly inside Apple Mail.</h1>
+      <p class="subtitle">
+        <strong>Plume</strong> is a native AI spell, grammar, and style checker integrated with Apple Mail on macOS. Bring Your Own API Key (<strong>Google Gemini, Claude, OpenAI, OpenRouter</strong>) or run 100% locally and privately with <strong>Ollama</strong>.
+      </p>
+    </div>
+
+    <div class="cta-group">
+      <a class="btn btn-primary" href="https://github.com/pschaus/plume/releases/latest/download/Plume-macOS.dmg">
+        <span data-lang="fr">⬇ Télécharger pour macOS (.dmg Universel)</span>
+        <span data-lang="en">⬇ Download for macOS (Universal .dmg)</span>
+      </a>
+      <a class="btn btn-secondary" href="#manual">
+        <span data-lang="fr">📖 Lire le Manuel Utilisateur</span>
+        <span data-lang="en">📖 Read the User Manual</span>
+      </a>
+      <a class="btn btn-secondary" href="https://github.com/pschaus/plume" target="_blank">
+        <span>★ GitHub Repository</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- SCREENSHOTS -->
+  <section id="screenshots">
+    <div data-lang="fr">
+      <h2>✨ Aperçu de l'application</h2>
+      <p class="section-lead">Deux modes d'affichage complémentaires pour réviser vos brouillons Apple Mail en un clin d'œil.</p>
+      <div class="screenshots-grid">
+        <div class="screenshot-card">
+          <img src="screenshot-fine-grained.png" alt="Plume — Mode Éditeur Détaillé" />
+          <h3>Mode Éditeur détaillé</h3>
+          <p>Éditeur complet à gauche et cartes de suggestions individuelles à droite (Accepter, Accepter & Maj Mail, Ignorer ou personnaliser au crayon).</p>
+        </div>
+        <div class="screenshot-card">
+          <img src="screenshot-light-mode.png" alt="Plume — Mode Indicateur Léger" />
+          <h3>Mode Indicateur léger</h3>
+          <p>Soulignements colorés par catégorie (Rouge = Orthographe, Bleu = Grammaire, Ambre = Style) avec barre d'inspection et correction rapide en un clic.</p>
+        </div>
+      </div>
+    </div>
+
+    <div data-lang="en">
+      <h2>✨ Application Screenshots</h2>
+      <p class="section-lead">Two complementary editing modes to review and polish your Apple Mail drafts effortlessly.</p>
+      <div class="screenshots-grid">
+        <div class="screenshot-card">
+          <img src="screenshot-fine-grained.png" alt="Plume — Fine-Grained Editor Mode" />
+          <h3>Fine-Grained Editor Mode</h3>
+          <p>Full editable draft on the left and individual suggestion cards on the right (Accept, Accept & Update Mail, Ignore, or customize inline).</p>
+        </div>
+        <div class="screenshot-card">
+          <img src="screenshot-light-mode.png" alt="Plume — Light Indicator Mode" />
+          <h3>Light Indicator Mode</h3>
+          <p>Color-coded inline underlines (Red = Spelling, Blue = Grammar, Amber = Style) with a bottom quick-fix inspection bar.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div data-lang="fr">
+      <h2>Pourquoi choisir Plume ?</h2>
+      <p class="section-lead">Conçu en Swift & SwiftUI natif pour s'intégrer naturellement à votre flux de rédaction dans Apple Mail.</p>
+      <div class="grid-3">
+        <div class="card">
+          <h3>🧠 Multi-Fournisseurs IA & Ollama Local</h3>
+          <p>Compatible avec <strong>Google Gemini</strong> (<code>gemini-3.8-flash</code>), <strong>Anthropic Claude</strong>, <strong>OpenAI</strong>, <strong>OpenRouter</strong> ainsi qu'avec <strong>Ollama en local</strong> (ex: <code>gemma4:latest</code>) sans clé API ni abonnement.</p>
+        </div>
+        <div class="card">
+          <h3>🌍 Détection automatique de la langue</h3>
+          <p>Reconnaît automatiquement la langue dans laquelle vous rédigez votre e-mail (Français, Anglais, Espagnol, Allemand, Néerlandais, Italien…) et adapte ses explications.</p>
+        </div>
+        <div class="card">
+          <h3>🎯 Granularité fine & 2 modes d'affichage</h3>
+          <p>Basculez entre le mode <strong>Indicateur léger</strong> (soulignements couleurs : Rouge = Orthographe, Bleu = Grammaire, Ambre = Style) et l'<strong>Éditeur détaillé</strong> pour accepter, ignorer ou modifier chaque correction individuellement.</p>
+        </div>
+      </div>
+    </div>
+
+    <div data-lang="en">
+      <h2>Why Plume?</h2>
+      <p class="section-lead">Built natively with Swift & SwiftUI to fit seamlessly into your Apple Mail writing workflow.</p>
+      <div class="grid-3">
+        <div class="card">
+          <h3>🧠 Multi-Provider AI & Local Ollama</h3>
+          <p>Supports <strong>Google Gemini</strong> (<code>gemini-3.8-flash</code>), <strong>Anthropic Claude</strong>, <strong>OpenAI</strong>, <strong>OpenRouter</strong>, and 100% offline local models via <strong>Ollama</strong> (e.g. <code>gemma4:latest</code>) with zero API keys required.</p>
+        </div>
+        <div class="card">
+          <h3>🌍 Automatic Language Detection</h3>
+          <p>Automatically detects the language of your draft (French, English, Spanish, German, Dutch, Italian…) and provides explanations in that same language.</p>
+        </div>
+        <div class="card">
+          <h3>🎯 Fine-Grained Control & 2 UI Modes</h3>
+          <p>Switch between <strong>Light Indicator Mode</strong> (color-coded inline underlines: Red = Spelling, Blue = Grammar, Amber = Style) and <strong>Fine-Grained Editor Mode</strong> to accept, ignore, or customize each fix one by one.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- USER MANUAL -->
+  <section id="manual">
+    <div data-lang="fr">
+      <h2>📖 Manuel Utilisateur</h2>
+      <p class="section-lead">Guide pas-à-pas pour installer, configurer et utiliser Plume avec Apple Mail.</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>1. Installation & Permission Accessibilité</h3>
+          <ol>
+            <li>Téléchargez <code>Plume-macOS.dmg</code> et glissez <strong>Plume.app</strong> dans votre dossier <code>/Applications</code>.</li>
+            <li>Au premier lancement, cliquez sur la bannière orange <strong>« Ouvrir Réglages Système... »</strong>.</li>
+            <li>Dans <strong>Réglages Système → Confidentialité et sécurité → Accessibilité</strong>, activez l'interrupteur à côté de <strong>Plume</strong>.</li>
+            <li>Le voyant en bas à droite de Plume passe au vert (<em>Lien Apple Mail actif</em>).</li>
+          </ol>
+        </div>
+
+        <div class="card">
+          <h3>2. Configuration du moteur IA (Clés API ou Ollama)</h3>
+          <ol>
+            <li><strong>Option A — Ollama en local (Gratuit & sans clé) :</strong> Installez Ollama (<code>ollama pull gemma4:latest</code>). Plume détecte automatiquement vos modèles locaux au démarrage.</li>
+            <li><strong>Option B — Clés API Cloud :</strong> Cliquez sur <strong>Clés API & Modèles</strong> en haut à droite, collez votre clé <em>Google Gemini</em>, <em>Claude</em>, <em>OpenAI</em> ou <em>OpenRouter</em>, puis sélectionnez le fournisseur dans le menu déroulant.</li>
+          </ol>
+        </div>
+
+        <div class="card">
+          <h3>3. Corriger un e-mail dans Apple Mail</h3>
+          <ul>
+            <li><strong>Via la pilule flottante :</strong> Dès qu'une fenêtre de rédaction Apple Mail est ouverte, la pilule flottante de Plume apparaît en bas à droite. Cliquez sur <strong>Lire Mail</strong> pour analyser votre brouillon, puis sur <strong>Tout corriger</strong> ou sur le badge pour réviser chaque faute.</li>
+            <li><strong>Via les boutons / raccourcis :</strong>
+              <ul>
+                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>R</kbd> (<strong>Lire depuis Apple Mail</strong>) : récupère le texte de la fenêtre de rédaction active de Mail.</li>
+                <li><kbd>⌘</kbd> + <kbd>Entrée</kbd> : relance l'analyse IA.</li>
+                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>A</kbd> (<strong>Appliquer dans Apple Mail</strong>) : remplace directement le texte dans votre brouillon Apple Mail.</li>
+              </ul>
+            </li>
+            <li><strong>Via le menu Services de macOS :</strong> Sélectionnez du texte dans Mail → Clic droit → <em>Services</em> → <em>Check Spelling & Grammar with Plume</em> (ou <kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>;</kbd>).</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>4. Révision granulaire & Mises à jour</h3>
+          <ul>
+            <li><strong>Mode Indicateur léger :</strong> Cliquez directement sur un mot souligné en rouge (orthographe), bleu (grammaire) ou ambre (style) pour afficher la barre d'action rapide en bas de l'écran.</li>
+            <li><strong>Mode Éditeur détaillé :</strong> Utilisez le volet de droite pour filtrer par catégorie, accepter une correction unique (<strong>Accepter & Maj Mail</strong>), l'ignorer (<strong>✕</strong>), ou cliquer sur l'icône crayon (<strong>✏️</strong>) pour personnaliser la suggestion avant de l'appliquer.</li>
+            <li><strong>Notifications de mise à jour :</strong> Lorsqu'une nouvelle version est publiée sur GitHub, une bannière mauve s'affiche en haut de l'application avec le bouton <strong>Nouveautés (Changelog)</strong> et le lien de téléchargement direct.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div data-lang="en">
+      <h2>📖 User Manual</h2>
+      <p class="section-lead">Step-by-step guide to installing, configuring, and using Plume with Apple Mail.</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>1. Installation & Accessibility Permission</h3>
+          <ol>
+            <li>Download <code>Plume-macOS.dmg</code> and drag <strong>Plume.app</strong> into your <code>/Applications</code> folder.</li>
+            <li>On first launch, click the orange banner <strong>"Enable in System Settings..."</strong>.</li>
+            <li>In <strong>System Settings → Privacy & Security → Accessibility</strong>, toggle the switch ON next to <strong>Plume</strong>.</li>
+            <li>The status indicator at the bottom-right of Plume will turn green (<em>Mail Live Hook Active</em>).</li>
+          </ol>
+        </div>
+
+        <div class="card">
+          <h3>2. Configuring Your AI Provider (API Keys or Ollama)</h3>
+          <ol>
+            <li><strong>Option A — Local Ollama (Free & Zero Key):</strong> Install Ollama (<code>ollama pull gemma4:latest</code>). Plume automatically detects your installed local models on startup.</li>
+            <li><strong>Option B — Cloud API Keys:</strong> Click <strong>API Keys & Models</strong> in the top-right toolbar, paste your <em>Google Gemini</em>, <em>Claude</em>, <em>OpenAI</em>, or <em>OpenRouter</em> key, and pick your preferred provider from the dropdown.</li>
+          </ol>
+        </div>
+
+        <div class="card">
+          <h3>3. Checking & Updating an Email in Apple Mail</h3>
+          <ul>
+            <li><strong>Via the Floating Pill:</strong> When an Apple Mail compose window is open, Plume's floating pill anchors to its bottom-right corner. Click <strong>Check Mail</strong> to analyze your draft, then click <strong>Fix All</strong> or click the counter badge to review issues one by one.</li>
+            <li><strong>Via Toolbar Buttons / Shortcuts:</strong>
+              <ul>
+                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>R</kbd> (<strong>Pull from Apple Mail</strong>): reads the text from the active Mail compose window.</li>
+                <li><kbd>⌘</kbd> + <kbd>Return</kbd>: triggers AI spell & grammar analysis.</li>
+                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>A</kbd> (<strong>Apply to Active Mail Window</strong>): replaces the text directly in your Apple Mail compose body.</li>
+              </ul>
+            </li>
+            <li><strong>Via macOS System Services:</strong> Select text in Mail → Right-click → <em>Services</em> → <em>Check Spelling & Grammar with Plume</em> (or press <kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>;</kbd>).</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>4. Fine-Grained Review & Auto-Update Banner</h3>
+          <ul>
+            <li><strong>Light Indicator Mode:</strong> Click any underlined word (Red = Spelling, Blue = Grammar, Amber = Style) to reveal the compact bottom quick-fix bar.</li>
+            <li><strong>Fine-Grained Editor Mode:</strong> Use the right-hand inspector to filter by category, accept a single correction (<strong>Accept & Update Mail</strong>), dismiss it (<strong>✕</strong>), or click the pencil icon (<strong>✏️</strong>) to edit the suggestion before applying.</li>
+            <li><strong>Update Notifications:</strong> Whenever a new release is published on GitHub, a purple banner appears at the top of the app with a <strong>View Changelog</strong> modal and 1-click download.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPATIBILITY -->
+  <section id="compatibility">
+    <div data-lang="fr">
+      <h2>💻 Versions de macOS supportées</h2>
+      <p class="section-lead">Plume est distribué sous forme de binaire universel notarié par Apple (compatible Apple Silicon & Intel).</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Version de macOS</th>
+            <th>Architecture (CPU)</th>
+            <th>Statut</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>macOS 26 (Tahoe)</strong></td>
+            <td>Apple Silicon (M1–M4) & Intel</td>
+            <td class="status-ok">✅ Pleinement supporté</td>
+            <td>Binaire universel natif (<code>arm64</code> + <code>x86_64</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>macOS 15 (Sequoia)</strong></td>
+            <td>Apple Silicon (M1–M4) & Intel</td>
+            <td class="status-ok">✅ Pleinement supporté</td>
+            <td>Binaire universel natif (<code>arm64</code> + <code>x86_64</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>macOS 14 (Sonoma)</strong></td>
+            <td>Apple Silicon (M1–M4) & Intel</td>
+            <td class="status-ok">✅ Pleinement supporté</td>
+            <td>Binaire universel natif (<code>arm64</code> + <code>x86_64</code>)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div data-lang="en">
+      <h2>💻 Supported macOS Versions</h2>
+      <p class="section-lead">Plume is distributed as an Apple-notarized Universal Binary (supporting both Apple Silicon & Intel Macs).</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>macOS Version</th>
+            <th>CPU Architecture</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>macOS 26 (Tahoe)</strong></td>
+            <td>Apple Silicon (M1–M4) & Intel</td>
+            <td class="status-ok">✅ Fully Supported</td>
+            <td>Native Universal Binary (<code>arm64</code> + <code>x86_64</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>macOS 15 (Sequoia)</strong></td>
+            <td>Apple Silicon (M1–M4) & Intel</td>
+            <td class="status-ok">✅ Fully Supported</td>
+            <td>Native Universal Binary (<code>arm64</code> + <code>x86_64</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>macOS 14 (Sonoma)</strong></td>
+            <td>Apple Silicon (M1–M4) & Intel</td>
+            <td class="status-ok">✅ Fully Supported</td>
+            <td>Native Universal Binary (<code>arm64</code> + <code>x86_64</code>)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      <strong>Plume</strong> · Open Source (MIT License) · Copyright © 2026 Pierre Schaus ·
+      <a href="https://github.com/pschaus/plume" target="_blank">GitHub (pschaus/plume)</a> ·
+      <a href="https://github.com/pschaus/plume/releases" target="_blank">Releases & Changelog</a>
+    </p>
+  </footer>
+
+  <script>
+    function setLang(lang) {
+      document.body.classList.toggle('lang-en', lang === 'en');
+      document.getElementById('btn-fr').classList.toggle('active', lang === 'fr');
+      document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+      document.documentElement.lang = lang;
+    }
+  </script>
+</body>
+</html>

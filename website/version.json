@@ -1,0 +1,11 @@
+{
+  "version": "1.0.1",
+  "name": "Plume v1.0.1",
+  "title": "Plume v1.0.1",
+  "published_at": "2026-11-08T14:44:52.000Z",
+  "notes": "### ✨ Improvements & Fixes (FR / EN)\n- **FR** :\n  - 🐛 Correction de l'affichage de l'icône de `Plume.app` et du volume `.dmg` dans le Finder, avec mise en page visuelle (`128x128`) et raccourci glisser-déposer vers `Applications`.\n  - ✨ Exemple interactif pré-chargé au premier lancement et mise à jour du site web et du `README.md` avec les captures d'écran des deux modes d'édition.\n- **EN**:\n  - 🐛 Fixed `Plume.app` and `.dmg` volume icon display in Finder with a `128x128` icon layout and `Applications` drop link.\n  - ✨ Added preloaded interactive sample on first launch and updated the website and `README.md` with screenshots of both editing modes.",
+  "html_url": "https://github.com/pschaus/plume/releases/tag/v1.0.1",
+  "assets": {
+    "macos": "https://github.com/pschaus/plume/releases/latest/download/Plume_1.0.1_universal.dmg"
+  }
+}
