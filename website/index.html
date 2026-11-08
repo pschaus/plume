@@ -389,6 +389,10 @@
           <h3>🎯 Granularité fine & 2 modes d'affichage</h3>
           <p>Basculez entre le mode <strong>Indicateur léger</strong> (soulignements couleurs : Rouge = Orthographe, Bleu = Grammaire, Ambre = Style) et l'<strong>Éditeur détaillé</strong> pour accepter, ignorer ou modifier chaque correction individuellement.</p>
         </div>
+        <div class="card">
+          <h3>💬 Préservation des réponses & du formatage</h3>
+          <p>Lorsque vous répondez à un e-mail, Plume analyse uniquement votre nouveau message : l'historique cité (barre de citation d'Apple Mail), votre signature et votre mise en forme (gras, italique, liens, listes, images) restent strictement intacts.</p>
+        </div>
       </div>
     </div>
 
@@ -407,6 +411,10 @@
         <div class="card">
           <h3>🎯 Fine-Grained Control & 2 UI Modes</h3>
           <p>Switch between <strong>Light Indicator Mode</strong> (color-coded inline underlines: Red = Spelling, Blue = Grammar, Amber = Style) and <strong>Fine-Grained Editor Mode</strong> to accept, ignore, or customize each fix one by one.</p>
+        </div>
+        <div class="card">
+          <h3>💬 Preserves Quoted Replies & Rich Formatting</h3>
+          <p>When replying to an email, Plume only checks your new reply text: the quoted thread below (including Apple Mail's quote bar status), your signature, and your rich text formatting (bold, italic, links, lists, inline images) remain completely untouched.</p>
         </div>
       </div>
     </div>
@@ -443,9 +451,9 @@
             <li><strong>Via la pilule flottante :</strong> Dès qu'une fenêtre de rédaction Apple Mail est ouverte, la pilule flottante de Plume apparaît en bas à droite. Cliquez sur <strong>Lire Mail</strong> pour analyser votre brouillon, puis sur <strong>Tout corriger</strong> ou sur le badge pour réviser chaque faute.</li>
             <li><strong>Via les boutons / raccourcis :</strong>
               <ul>
-                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>R</kbd> (<strong>Lire depuis Apple Mail</strong>) : récupère le texte de la fenêtre de rédaction active de Mail.</li>
+                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>R</kbd> (<strong>Lire depuis Apple Mail</strong>) : récupère uniquement votre nouveau texte dans la fenêtre de rédaction active de Mail (en ignorant automatiquement les messages cités en dessous).</li>
                 <li><kbd>⌘</kbd> + <kbd>Entrée</kbd> : relance l'analyse IA.</li>
-                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>A</kbd> (<strong>Appliquer dans Apple Mail</strong>) : remplace directement le texte dans votre brouillon Apple Mail.</li>
+                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>A</kbd> (<strong>Appliquer dans Apple Mail</strong>) : applique les corrections dans votre brouillon Apple Mail tout en préservant votre mise en forme (gras, italique, liens), votre signature et le statut de citation des réponses précédentes.</li>
               </ul>
             </li>
             <li><strong>Via le menu Services de macOS :</strong> Sélectionnez du texte dans Mail → Clic droit → <em>Services</em> → <em>Check Spelling & Grammar with Plume</em> (ou <kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>;</kbd>).</li>
@@ -492,9 +500,9 @@
             <li><strong>Via the Floating Pill:</strong> When an Apple Mail compose window is open, Plume's floating pill anchors to its bottom-right corner. Click <strong>Check Mail</strong> to analyze your draft, then click <strong>Fix All</strong> or click the counter badge to review issues one by one.</li>
             <li><strong>Via Toolbar Buttons / Shortcuts:</strong>
               <ul>
-                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>R</kbd> (<strong>Pull from Apple Mail</strong>): reads the text from the active Mail compose window.</li>
+                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>R</kbd> (<strong>Pull from Apple Mail</strong>): reads only your new reply from the active Mail compose window (automatically ignoring quoted messages below).</li>
                 <li><kbd>⌘</kbd> + <kbd>Return</kbd>: triggers AI spell & grammar analysis.</li>
-                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>A</kbd> (<strong>Apply to Active Mail Window</strong>): replaces the text directly in your Apple Mail compose body.</li>
+                <li><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>A</kbd> (<strong>Apply to Active Mail Window</strong>): applies corrections directly in your Apple Mail draft while preserving rich formatting (bold, italic, links), signatures, and the quote bar status of previous replies.</li>
               </ul>
             </li>
             <li><strong>Via macOS System Services:</strong> Select text in Mail → Right-click → <em>Services</em> → <em>Check Spelling & Grammar with Plume</em> (or press <kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>;</kbd>).</li>

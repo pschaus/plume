@@ -1,11 +1,11 @@
 {
-  "version": "1.0.1",
-  "name": "Plume v1.0.1",
-  "title": "Plume v1.0.1",
-  "published_at": "2026-11-08T14:44:52.000Z",
-  "notes": "### ✨ Improvements & Fixes (FR / EN)\n- **FR** :\n  - 🐛 Correction de l'affichage de l'icône de `Plume.app` et du volume `.dmg` dans le Finder, avec mise en page visuelle (`128x128`) et raccourci glisser-déposer vers `Applications`.\n  - ✨ Exemple interactif pré-chargé au premier lancement et mise à jour du site web et du `README.md` avec les captures d'écran des deux modes d'édition.\n- **EN**:\n  - 🐛 Fixed `Plume.app` and `.dmg` volume icon display in Finder with a `128x128` icon layout and `Applications` drop link.\n  - ✨ Added preloaded interactive sample on first launch and updated the website and `README.md` with screenshots of both editing modes.",
-  "html_url": "https://github.com/pschaus/plume/releases/tag/v1.0.1",
+  "version": "1.0.2",
+  "name": "Plume v1.0.2",
+  "title": "Plume v1.0.2",
+  "published_at": "2026-11-08T15:34:45.000Z",
+  "notes": "### ✨ Improvements & Fixes (FR / EN)\n- **FR** :\n  - ✨ **Préservation des réponses citées dans Apple Mail** : Ignore automatiquement l'historique cité et la signature lors de l'import (`⌘⇧R`), et conserve intacte la barre de citation (`<blockquote type=\"cite\">`) lors de l'application des corrections (`⌘⇧A`).\n  - 🎨 **Conservation du formatage riche (HTML & WebArchive)** : Préserve le gras, l'italique, le souligné, les liens, les listes et les images intégrées dans votre réponse grâce à un remplacement différentiel au niveau des nœuds texte HTML.\n- **EN**:\n  - ✨ **Quoted Email Reply Preservation**: Automatically ignores quoted thread history and signatures when pulling from Apple Mail (`⌘⇧R`), and keeps Apple Mail's quote bar status (`<blockquote type=\"cite\">`) untouched when applying fixes (`⌘⇧A`).\n  - 🎨 **Rich Text Formatting Preservation (HTML & WebArchive)**: Preserves bold, italic, underline, links, lists, and inline images in your reply via token-level HTML diff patching.",
+  "html_url": "https://github.com/pschaus/plume/releases/tag/v1.0.2",
   "assets": {
-    "macos": "https://github.com/pschaus/plume/releases/latest/download/Plume_1.0.1_universal.dmg"
+    "macos": "https://github.com/pschaus/plume/releases/latest/download/Plume_1.0.2_universal.dmg"
   }
 }

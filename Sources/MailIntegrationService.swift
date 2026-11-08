@@ -31,6 +31,366 @@ enum MailIntegrationError: LocalizedError {
     }
 }
 
+// MARK: - Rich HTML, Quote & Formatting Preserver for Apple Mail
+
+struct MailHTMLPreserver {
+    struct CharMap {
+        let visibleChar: Character
+        let htmlRange: Range<String.Index>
+    }
+
+    static func isAttributionLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        if trimmed.hasPrefix(">") { return true }
+        if trimmed.hasPrefix("-----Original Message-----") || trimmed.hasPrefix("-------- Message transféré") {
+            return true
+        }
+        let lower = trimmed.lowercased()
+        if lower.hasPrefix("début du message réexpédié") || lower.hasPrefix("begin forwarded message") {
+            return true
+        }
+        if trimmed.hasSuffix(":") {
+            let prefixes = ["le ", "on ", "am ", "el ", "op ", "il "]
+            let suffixes = ["a écrit :", "a écrit:", "wrote:", "schrieb:", "escribió:", "schreef:", "ha scritto:"]
+            if prefixes.contains(where: { lower.hasPrefix($0) }) && suffixes.contains(where: { lower.hasSuffix($0) }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Splits a plain-text email draft into `(replyText, quotedSuffix)`, leaving out signatures and quoted replies.
+    static func splitMailPlainText(_ fullText: String) -> (replyText: String, quotedSuffix: String) {
+        let lines = fullText.components(separatedBy: "\n")
+        var splitLineIdx: Int? = nil
+        var i = 0
+        while i < lines.count {
+            let line = lines[i]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if isAttributionLine(trimmed) || trimmed == "--" || line == "-- " {
+                splitLineIdx = i
+                break
+            }
+            if i + 1 < lines.count {
+                let combined = trimmed + " " + lines[i + 1].trimmingCharacters(in: .whitespaces)
+                if isAttributionLine(combined) {
+                    splitLineIdx = i
+                    break
+                }
+            }
+            i += 1
+        }
+        guard let idx = splitLineIdx else {
+            return (fullText.trimmingCharacters(in: .whitespacesAndNewlines), "")
+        }
+        let reply = lines[..<idx].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let quoted = lines[idx...].joined(separator: "\n")
+        return (reply, quoted)
+    }
+
+    /// Splits Apple Mail's compose HTML into `(replyHTML, quotedHTML)` so that signatures,
+    /// attribution headers ("On ... wrote:" / "Le ... a écrit :"), and `<blockquote type="cite">`
+    /// remain 100% untouched.
+    static func splitMailHTML(_ html: String) -> (replyHTML: String, quotedHTML: String) {
+        let markers = [
+            "id=\"AppleMailSignature\"",
+            "id='AppleMailSignature'",
+            "class=\"AppleMailSignature\"",
+            "class='AppleMailSignature'",
+            "class=\"AppleOriginalContents\"",
+            "class='AppleOriginalContents'",
+            "id=\"AppleOriginalContents\"",
+            "id='AppleOriginalContents'",
+            "<blockquote"
+        ]
+
+        var earliestTagStart: String.Index? = nil
+        let lowerHTML = html.lowercased()
+
+        for marker in markers {
+            let lowerMarker = marker.lowercased()
+            if let range = lowerHTML.range(of: lowerMarker) {
+                var tagStart = range.lowerBound
+                if !lowerMarker.hasPrefix("<") {
+                    if let openBracket = lowerHTML[..<tagStart].lastIndex(of: "<") {
+                        tagStart = openBracket
+                    }
+                }
+                if earliestTagStart == nil || tagStart < earliestTagStart! {
+                    earliestTagStart = tagStart
+                }
+            }
+        }
+
+        guard var splitIndex = earliestTagStart else {
+            return (html, "")
+        }
+
+        // If splitting at <blockquote, check if the preceding visible line(s) in HTML are the attribution header
+        // ("Le ... a écrit :" / "On ... wrote:") and include them in `quotedHTML` so they aren't spell-checked or lost.
+        if lowerHTML[splitIndex...].hasPrefix("<blockquote") {
+            let prefixHTML = String(html[..<splitIndex])
+            let (visiblePrefix, mapPrefix) = buildVisibleMap(html: prefixHTML)
+            let (_, quotedPlainSuffix) = splitMailPlainText(visiblePrefix)
+            if !quotedPlainSuffix.isEmpty,
+               let attrRange = visiblePrefix.range(of: quotedPlainSuffix, options: .backwards) {
+                let charStartOffset = visiblePrefix.distance(from: visiblePrefix.startIndex, to: attrRange.lowerBound)
+                if charStartOffset < mapPrefix.count {
+                    var attrHTMLStart = mapPrefix[charStartOffset].htmlRange.lowerBound
+                    // Walk back across any immediately enclosing inline/block opening tag (e.g. <div>)
+                    let lookbehindStart = html.index(attrHTMLStart, offsetBy: -120, limitedBy: html.startIndex) ?? html.startIndex
+                    let beforeAttr = html[lookbehindStart..<attrHTMLStart]
+                    if let lastOpenTag = beforeAttr.range(of: "<div", options: [.caseInsensitive, .backwards]) {
+                        let between = beforeAttr[lastOpenTag.lowerBound...]
+                        if !between.contains("</div>") {
+                            attrHTMLStart = lastOpenTag.lowerBound
+                        }
+                    }
+                    splitIndex = attrHTMLStart
+                }
+            }
+        }
+
+        return (String(html[..<splitIndex]), String(html[splitIndex...]))
+    }
+
+    static func bodyContentStartIndex(in html: String) -> String.Index {
+        if let bodyRange = html.range(of: "<body", options: .caseInsensitive),
+           let closeBracket = html[bodyRange.lowerBound...].firstIndex(of: ">") {
+            return html.index(after: closeBracket)
+        }
+        if let headEndRange = html.range(of: "</head>", options: .caseInsensitive) {
+            return headEndRange.upperBound
+        }
+        return html.startIndex
+    }
+
+    static func buildVisibleMap(html: String) -> (visibleText: String, map: [CharMap]) {
+        var visible = ""
+        var map: [CharMap] = []
+        var i = bodyContentStartIndex(in: html)
+        var lastWasBR = false
+
+        while i < html.endIndex {
+            let c = html[i]
+            if c == "<" {
+                if let closeIdx = html[i...].firstIndex(of: ">") {
+                    let tagContent = html[html.index(after: i)..<closeIdx].lowercased()
+                    let tagName = tagContent.split(separator: " ").first ?? Substring(tagContent)
+                    let nextIdx = html.index(after: closeIdx)
+                    if tagName == "br" || tagName == "br/" {
+                        visible.append("\n")
+                        map.append(CharMap(visibleChar: "\n", htmlRange: i..<nextIdx))
+                        lastWasBR = true
+                    } else if tagName == "/div" || tagName == "/p" || tagName == "/li" {
+                        if !lastWasBR && !visible.isEmpty {
+                            visible.append("\n")
+                            map.append(CharMap(visibleChar: "\n", htmlRange: i..<i))
+                        }
+                        lastWasBR = false
+                    }
+                    i = nextIdx
+                    continue
+                }
+            } else if c == "&" {
+                let maxEnd = html.index(i, offsetBy: 10, limitedBy: html.endIndex) ?? html.endIndex
+                if let semiIdx = html[i..<maxEnd].firstIndex(of: ";") {
+                    let entity = String(html[i...semiIdx])
+                    let nextIdx = html.index(after: semiIdx)
+                    let decoded: Character?
+                    switch entity.lowercased() {
+                    case "&nbsp;", "&#160;": decoded = " "
+                    case "&amp;", "&#38;": decoded = "&"
+                    case "&lt;", "&#60;": decoded = "<"
+                    case "&gt;", "&#62;": decoded = ">"
+                    case "&quot;", "&#34;": decoded = "\""
+                    case "&apos;", "&#39;", "&rsquo;", "&lsquo;": decoded = "'"
+                    default: decoded = nil
+                    }
+                    if let d = decoded {
+                        visible.append(d)
+                        map.append(CharMap(visibleChar: d, htmlRange: i..<nextIdx))
+                        lastWasBR = false
+                        i = nextIdx
+                        continue
+                    }
+                }
+            } else if c == "\r" || c == "\n" {
+                i = html.index(after: i)
+                continue
+            }
+
+            let nextIdx = html.index(after: i)
+            visible.append(c)
+            map.append(CharMap(visibleChar: c, htmlRange: i..<nextIdx))
+            lastWasBR = false
+            i = nextIdx
+        }
+
+        return (visible, map)
+    }
+
+    static func tokenize(_ text: String) -> [(token: String, charStart: Int, charEnd: Int)] {
+        var result: [(String, Int, Int)] = []
+        let chars = Array(text)
+        var i = 0
+        while i < chars.count {
+            let start = i
+            let c = chars[i]
+            if c.isLetter || c.isNumber {
+                while i < chars.count && (chars[i].isLetter || chars[i].isNumber) { i += 1 }
+            } else if c.isWhitespace {
+                while i < chars.count && chars[i].isWhitespace { i += 1 }
+            } else {
+                i += 1
+            }
+            result.append((String(chars[start..<i]), start, i))
+        }
+        return result
+    }
+
+    static func escapeHTML(_ text: String) -> String {
+        return text
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\n", with: "<br>")
+    }
+
+    /// Projects updated plain text onto `replyHTML` using token-level LCS diffing,
+    /// preserving inline formatting (`<b>`, `<i>`, `<u>`, `<a href>`, `<span style>`, lists, etc.).
+    static func applyUpdatedText(to replyHTML: String, newPlainText: String) -> String {
+        let (oldVisibleRaw, map) = buildVisibleMap(html: replyHTML)
+        let oldTrimmed = oldVisibleRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newTrimmed = newPlainText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if oldTrimmed == newTrimmed {
+            return replyHTML
+        }
+
+        if map.isEmpty || oldTrimmed.isEmpty {
+            let escaped = "<div>" + escapeHTML(newTrimmed) + "</div>"
+            let insertPos = bodyContentStartIndex(in: replyHTML)
+            var res = replyHTML
+            res.insert(contentsOf: escaped, at: insertPos)
+            return res
+        }
+
+        let oldTokens = tokenize(oldVisibleRaw)
+        let newTokens = tokenize(newTrimmed)
+
+        let n = oldTokens.count
+        let m = newTokens.count
+        var dp = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
+        for i in stride(from: n - 1, through: 0, by: -1) {
+            for j in stride(from: m - 1, through: 0, by: -1) {
+                if oldTokens[i].token == newTokens[j].token {
+                    dp[i][j] = 1 + dp[i + 1][j + 1]
+                } else {
+                    dp[i][j] = max(dp[i + 1][j], dp[i][j + 1])
+                }
+            }
+        }
+
+        var matches: [(oldIdx: Int, newIdx: Int)] = []
+        var i = 0, j = 0
+        while i < n && j < m {
+            if oldTokens[i].token == newTokens[j].token {
+                matches.append((i, j))
+                i += 1
+                j += 1
+            } else if dp[i + 1][j] >= dp[i][j + 1] {
+                i += 1
+            } else {
+                j += 1
+            }
+        }
+
+        var ops: [(oldRange: Range<Int>, newRange: Range<Int>)] = []
+        var prevOld = 0
+        var prevNew = 0
+        for match in matches {
+            if match.oldIdx > prevOld || match.newIdx > prevNew {
+                ops.append((prevOld..<match.oldIdx, prevNew..<match.newIdx))
+            }
+            prevOld = match.oldIdx + 1
+            prevNew = match.newIdx + 1
+        }
+        if prevOld < n || prevNew < m {
+            ops.append((prevOld..<n, prevNew..<m))
+        }
+
+        var resultHTML = replyHTML
+        for op in ops.reversed() {
+            let oldSlice = op.oldRange.map { oldTokens[$0].token }.joined()
+            let newReplacement = op.newRange.map { newTokens[$0].token }.joined()
+
+            // Preserve leading/trailing whitespace & linebreaks in HTML structure
+            if (op.oldRange.lowerBound == 0 || op.oldRange.upperBound == n)
+                && oldSlice.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && newReplacement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                continue
+            }
+
+            // Preserve internal whitespace if both are pure whitespace with same newline count
+            if !oldSlice.isEmpty && !newReplacement.isEmpty
+                && oldSlice.allSatisfy(\.isWhitespace) && newReplacement.allSatisfy(\.isWhitespace)
+                && oldSlice.filter({ $0 == "\n" }).count == newReplacement.filter({ $0 == "\n" }).count {
+                continue
+            }
+
+            let htmlReplaceRange: Range<String.Index>
+            if op.oldRange.isEmpty {
+                if op.oldRange.lowerBound < n {
+                    let charIdx = oldTokens[op.oldRange.lowerBound].charStart
+                    let pos = map[charIdx].htmlRange.lowerBound
+                    htmlReplaceRange = pos..<pos
+                } else if let lastNonWS = oldTokens.last(where: { !$0.token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                    let pos = map[lastNonWS.charEnd - 1].htmlRange.upperBound
+                    htmlReplaceRange = pos..<pos
+                } else if let lastMap = map.last {
+                    let pos = lastMap.htmlRange.upperBound
+                    htmlReplaceRange = pos..<pos
+                } else {
+                    htmlReplaceRange = resultHTML.endIndex..<resultHTML.endIndex
+                }
+            } else {
+                let firstCharIdx = oldTokens[op.oldRange.lowerBound].charStart
+                let lastCharIdx = oldTokens[op.oldRange.upperBound - 1].charEnd - 1
+                let startPos = map[firstCharIdx].htmlRange.lowerBound
+                let endPos = map[lastCharIdx].htmlRange.upperBound
+                htmlReplaceRange = startPos..<endPos
+            }
+
+            resultHTML.replaceSubrange(htmlReplaceRange, with: escapeHTML(newReplacement))
+        }
+
+        return resultHTML
+    }
+
+    static func extractHTMLFromWebArchive(_ archiveData: Data?) -> String? {
+        guard let archiveData,
+              let plist = try? PropertyListSerialization.propertyList(from: archiveData, options: [], format: nil) as? [String: Any],
+              let mainResource = plist["WebMainResource"] as? [String: Any],
+              let htmlData = mainResource["WebResourceData"] as? Data,
+              let html = String(data: htmlData, encoding: .utf8) else {
+            return nil
+        }
+        return html
+    }
+
+    static func updateHTMLInWebArchive(_ archiveData: Data, newHTML: String) -> Data? {
+        guard var plist = try? PropertyListSerialization.propertyList(from: archiveData, options: .mutableContainersAndLeaves, format: nil) as? [String: Any],
+              var mainResource = plist["WebMainResource"] as? [String: Any],
+              let newHTMLData = newHTML.data(using: .utf8) else {
+            return nil
+        }
+        mainResource["WebResourceData"] = newHTMLData
+        plist["WebMainResource"] = mainResource
+        return try? PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
+    }
+}
+
 @MainActor
 final class MailIntegrationService: ObservableObject {
     static let shared = MailIntegrationService()
@@ -40,6 +400,10 @@ final class MailIntegrationService: ObservableObject {
     @Published var isMailFrontmost: Bool = false
     @Published var mailWindowFrame: CGRect? = nil
     @Published var lastCapturedMailText: String = ""
+
+    private var lastCapturedFullHTML: String? = nil
+    private var lastCapturedWebArchiveData: Data? = nil
+    private var lastCapturedFullPlainText: String? = nil
 
     private var monitorTimer: Timer?
 
@@ -156,8 +520,6 @@ final class MailIntegrationService: ObservableObject {
 
     // MARK: - Locate Apple Mail's Compose Window & Editable AXWebArea
 
-    /// Finds the active Compose Window and its editable body (`AXWebArea` or `AXTextArea`) in Apple Mail,
-    /// carefully ignoring the read-only Main Inbox Viewer window.
     private func findComposeWindowAndWebArea(in appElem: AXUIElement) -> (window: AXUIElement, webArea: AXUIElement)? {
         var windowsRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(appElem, kAXWindowsAttribute as CFString, &windowsRef) == .success,
@@ -166,7 +528,6 @@ final class MailIntegrationService: ObservableObject {
             return nil
         }
 
-        // First pass: look for a dedicated Compose window (has an AXWebArea, and does NOT have a mailbox AXOutline)
         for win in windows {
             let hasMailboxOutline = containsRole(in: win, role: "AXOutline", maxDepth: 6)
             if !hasMailboxOutline,
@@ -175,14 +536,12 @@ final class MailIntegrationService: ObservableObject {
             }
         }
 
-        // Second pass: check any window for an explicitly editable AXWebArea
         for win in windows {
             if let webArea = findEditableWebArea(in: win, requireExplicitEditableAttr: true, maxDepth: 14) {
                 return (win, webArea)
             }
         }
 
-        // Third pass: fallback to any window that has a web area
         for win in windows {
             if let webArea = findEditableWebArea(in: win, maxDepth: 14) {
                 return (win, webArea)
@@ -235,7 +594,40 @@ final class MailIntegrationService: ObservableObject {
         return nil
     }
 
-    // MARK: - 1. Pull Text from Active Apple Mail Compose Window
+    // MARK: - Pasteboard Snapshot Helpers
+
+    private func savePasteboardSnapshot() -> [[NSPasteboard.PasteboardType: Data]] {
+        let pb = NSPasteboard.general
+        var snapshot: [[NSPasteboard.PasteboardType: Data]] = []
+        for item in pb.pasteboardItems ?? [] {
+            var itemDict: [NSPasteboard.PasteboardType: Data] = [:]
+            for type in item.types {
+                if let data = item.data(forType: type) {
+                    itemDict[type] = data
+                }
+            }
+            if !itemDict.isEmpty {
+                snapshot.append(itemDict)
+            }
+        }
+        return snapshot
+    }
+
+    private func restorePasteboardSnapshot(_ snapshot: [[NSPasteboard.PasteboardType: Data]]) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        guard !snapshot.isEmpty else { return }
+        let items: [NSPasteboardItem] = snapshot.map { dict in
+            let item = NSPasteboardItem()
+            for (type, data) in dict {
+                item.setData(data, forType: type)
+            }
+            return item
+        }
+        pb.writeObjects(items)
+    }
+
+    // MARK: - 1. Pull Text from Active Apple Mail Compose Window (Excluding Quoted Thread)
 
     func pullTextFromMail() async -> Result<String, MailIntegrationError> {
         refreshStatus()
@@ -253,60 +645,78 @@ final class MailIntegrationService: ObservableObject {
             return .failure(.noComposeWindowFound)
         }
 
-        // Path A: Try fast non-intrusive AX tree extraction from the compose `AXWebArea`
-        if let treeText = extractStructuredTextFromWebArea(webArea),
-           !treeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            self.lastCapturedMailText = treeText
-            return .success(treeText)
-        }
-
-        // Path B: Focus the compose `AXWebArea` in Mail and trigger Mail's native Select All (⌘A) + Copy (⌘C)
-        let previousClipboard = NSPasteboard.general.string(forType: .string)
+        // Save user's clipboard before copying rich HTML/WebArchive from Mail
+        let savedClipboard = savePasteboardSnapshot()
         let initialChangeCount = NSPasteboard.general.changeCount
 
         mailApp.activate()
         _ = AXUIElementPerformAction(composeWin, kAXRaiseAction as CFString)
         _ = AXUIElementSetAttributeValue(composeWin, kAXMainAttribute as CFString, kCFBooleanTrue)
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        try? await Task.sleep(nanoseconds: 140_000_000)
 
         _ = AXUIElementSetAttributeValue(webArea, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        try? await Task.sleep(nanoseconds: 90_000_000)
 
-        // Try reading again now that WebKit's AXWebArea is focused
-        if let focusedTreeText = extractStructuredTextFromWebArea(webArea),
-           !focusedTreeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            NSApp.activate(ignoringOtherApps: true)
-            self.lastCapturedMailText = focusedTreeText
-            return .success(focusedTreeText)
-        }
-
-        // Trigger Select All (⌘A) and Copy (⌘C) via Apple Mail's Menu Bar
+        // Select All (⌘A) and Copy (⌘C) to capture both HTML/WebArchive and Plain Text
         if !pressMenuItem(in: appElem, cmdChar: "A") {
             sendKeystroke(keyCode: 0, flags: .maskCommand)
         }
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        try? await Task.sleep(nanoseconds: 90_000_000)
 
         if !pressMenuItem(in: appElem, cmdChar: "C") {
-            sendKeystroke(keyCode: 8, flags: .maskCommand) // Cmd+C
+            sendKeystroke(keyCode: 8, flags: .maskCommand)
         }
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        try? await Task.sleep(nanoseconds: 140_000_000)
 
-        // Clear selection by pressing Right Arrow
-        sendKeystroke(keyCode: 124, flags: [])
+        // Deselect by pressing Left Arrow (keyCode 123) so cursor stays at the top of the reply
+        sendKeystroke(keyCode: 123, flags: [])
 
         NSApp.activate(ignoringOtherApps: true)
 
-        if NSPasteboard.general.changeCount != initialChangeCount,
-           let copied = NSPasteboard.general.string(forType: .string),
-           !copied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            // Restore previous clipboard if needed
-            self.lastCapturedMailText = copied
-            return .success(copied)
+        if NSPasteboard.general.changeCount != initialChangeCount {
+            let pb = NSPasteboard.general
+            let webArchiveType1 = NSPasteboard.PasteboardType("Apple Web Archive pasteboard type")
+            let webArchiveType2 = NSPasteboard.PasteboardType("com.apple.webarchive")
+            let appleHTMLType = NSPasteboard.PasteboardType("Apple HTML pasteboard type")
+
+            let archiveData = pb.data(forType: webArchiveType1) ?? pb.data(forType: webArchiveType2)
+            let htmlString = pb.string(forType: .html)
+                ?? pb.string(forType: appleHTMLType)
+                ?? MailHTMLPreserver.extractHTMLFromWebArchive(archiveData)
+            let plainString = pb.string(forType: .string)
+
+            restorePasteboardSnapshot(savedClipboard)
+
+            self.lastCapturedWebArchiveData = archiveData
+            self.lastCapturedFullHTML = htmlString
+            self.lastCapturedFullPlainText = plainString
+
+            // Extract ONLY the user's new reply (excluding quoted thread & signature)
+            if let htmlString, !htmlString.isEmpty {
+                let (replyHTML, _) = MailHTMLPreserver.splitMailHTML(htmlString)
+                let visibleFromReplyHTML = MailHTMLPreserver.buildVisibleMap(html: replyHTML).visibleText
+                let (cleanReply, _) = MailHTMLPreserver.splitMailPlainText(visibleFromReplyHTML)
+                if !cleanReply.isEmpty {
+                    self.lastCapturedMailText = cleanReply
+                    return .success(cleanReply)
+                }
+            }
+
+            if let plainString, !plainString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let (cleanReply, _) = MailHTMLPreserver.splitMailPlainText(plainString)
+                let resultText = cleanReply.isEmpty ? plainString.trimmingCharacters(in: .whitespacesAndNewlines) : cleanReply
+                self.lastCapturedMailText = resultText
+                return .success(resultText)
+            }
+        } else {
+            restorePasteboardSnapshot(savedClipboard)
         }
 
-        if let previousClipboard {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(previousClipboard, forType: .string)
+        // Fallback to fast AX tree extraction (also excluding blockquotes & attribution)
+        if let treeText = extractStructuredTextFromWebArea(webArea),
+           !treeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            self.lastCapturedMailText = treeText
+            return .success(treeText)
         }
 
         return .failure(.emptyComposeBody)
@@ -324,70 +734,118 @@ final class MailIntegrationService: ObservableObject {
         return extractStructuredTextFromWebArea(webArea)
     }
 
-    /// Reconstructs multi-paragraph text from WebKit's `AXWebArea`.
+    /// Reconstructs multi-paragraph reply text from WebKit's `AXWebArea`, stopping before any quoted block or signature.
     private func extractStructuredTextFromWebArea(_ webArea: AXUIElement) -> String? {
-        // 1. Check direct kAXValueAttribute on webArea if non-empty
-        if let directVal = axStringAttribute(webArea, kAXValueAttribute),
-           !directVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return directVal
-        }
-
-        // 2. Walk child groups/paragraphs of `AXWebArea`
         let topChildren = axChildren(of: webArea)
         if !topChildren.isEmpty {
             var paragraphs: [String] = []
             for child in topChildren {
+                if isQuotedOrSignatureAXElement(child) {
+                    break
+                }
                 var inlineFragments: [String] = []
-                collectLeafText(from: child, into: &inlineFragments, maxDepth: 12)
+                var hitQuote = false
+                collectLeafText(from: child, into: &inlineFragments, hitQuote: &hitQuote, maxDepth: 12)
                 let line = inlineFragments.joined()
+                if MailHTMLPreserver.isAttributionLine(line) {
+                    break
+                }
                 paragraphs.append(line)
+                if hitQuote {
+                    break
+                }
             }
-            let result = paragraphs.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !result.isEmpty {
-                return result
+            let rawJoined = paragraphs.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            let (replyOnly, _) = MailHTMLPreserver.splitMailPlainText(rawJoined)
+            if !replyOnly.isEmpty {
+                return replyOnly
+            }
+        }
+
+        if let directVal = axStringAttribute(webArea, kAXValueAttribute),
+           !directVal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let (replyOnly, _) = MailHTMLPreserver.splitMailPlainText(directVal)
+            if !replyOnly.isEmpty {
+                return replyOnly
             }
         }
 
         return nil
     }
 
-    private func collectLeafText(from element: AXUIElement, into fragments: inout [String], maxDepth: Int) {
+    private func isQuotedOrSignatureAXElement(_ element: AXUIElement) -> Bool {
+        if let quoteLevel = axIntAttribute(element, "AXBlockQuoteLevel"), quoteLevel > 0 {
+            return true
+        }
+        if let domId = axStringAttribute(element, "AXDOMIdentifier")?.lowercased(),
+           domId.contains("applemailsignature") || domId.contains("appleoriginalcontents") {
+            return true
+        }
+        var classListRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, "AXDOMClassList" as CFString, &classListRef) == .success,
+           let classes = classListRef as? [String] {
+            for c in classes {
+                let lower = c.lowercased()
+                if lower.contains("appleoriginalcontents") || lower.contains("applemailsignature") {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    private func collectLeafText(from element: AXUIElement, into fragments: inout [String], hitQuote: inout Bool, maxDepth: Int) {
         guard maxDepth >= 0 else { return }
+        if isQuotedOrSignatureAXElement(element) {
+            hitQuote = true
+            return
+        }
         let role = axStringAttribute(element, kAXRoleAttribute) ?? ""
 
         if role == "AXStaticText" || role == "AXTextField" || role == "AXTextArea" {
             if let val = axStringAttribute(element, kAXValueAttribute), !val.isEmpty {
+                if MailHTMLPreserver.isAttributionLine(val) {
+                    hitQuote = true
+                    return
+                }
                 fragments.append(val)
                 return
             }
         }
 
         for child in axChildren(of: element) {
-            collectLeafText(from: child, into: &fragments, maxDepth: maxDepth - 1)
+            collectLeafText(from: child, into: &fragments, hitQuote: &hitQuote, maxDepth: maxDepth - 1)
+            if hitQuote { return }
         }
     }
 
-    // MARK: - 2. Apply Corrected Text Directly to Active Apple Mail Compose Window
+    // MARK: - 2. Apply Corrected Text Directly to Active Apple Mail Compose Window (Preserving Quotes & Formatting)
 
     func applyCorrectedTextToMail(_ correctedText: String) async -> Result<Void, MailIntegrationError> {
         refreshStatus()
-
-        // Always copy to clipboard first
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(correctedText, forType: .string)
-        self.lastCapturedMailText = correctedText
+        let (cleanCorrectedReply, _) = MailHTMLPreserver.splitMailPlainText(correctedText)
+        let replyToApply = cleanCorrectedReply.isEmpty
+            ? correctedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            : cleanCorrectedReply
+        self.lastCapturedMailText = replyToApply
 
         guard isAccessibilityTrusted else {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(replyToApply, forType: .string)
             requestAccessibilityPermission()
             return .failure(.accessibilityNotGranted)
         }
 
         guard let mailApp = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == "com.apple.mail" }) else {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(replyToApply, forType: .string)
             return .failure(.mailNotRunning)
         }
 
         let appElem = AXUIElementCreateApplication(mailApp.processIdentifier)
         guard let (composeWin, webArea) = findComposeWindowAndWebArea(in: appElem) else {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(replyToApply, forType: .string)
             return .failure(.noComposeWindowFound)
         }
 
@@ -396,19 +854,81 @@ final class MailIntegrationService: ObservableObject {
         _ = AXUIElementPerformAction(composeWin, kAXRaiseAction as CFString)
         _ = AXUIElementSetAttributeValue(composeWin, kAXMainAttribute as CFString, kCFBooleanTrue)
         _ = AXUIElementSetAttributeValue(composeWin, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-        try? await Task.sleep(nanoseconds: 180_000_000)
+        try? await Task.sleep(nanoseconds: 160_000_000)
 
-        // 2. Focus the editable `AXWebArea` (email body) explicitly so we NEVER paste into Subject/To!
+        // 2. Focus the editable `AXWebArea` (email body) explicitly
         _ = AXUIElementSetAttributeValue(webArea, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        try? await Task.sleep(nanoseconds: 100_000_000)
 
-        // 3. Select All (⌘A) inside `webArea` using Mail's native Menu Bar item
+        // 3. Select All (⌘A) inside `webArea`
         if !pressMenuItem(in: appElem, cmdChar: "A") {
             sendKeystroke(keyCode: 0, flags: .maskCommand)
         }
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        try? await Task.sleep(nanoseconds: 90_000_000)
 
-        // 4. Paste (⌘V) the corrected text from NSPasteboard using Mail's native Menu Bar item
+        // 4. Copy (⌘C) the current live content of the compose window so we have the exact latest
+        //    HTML formatting, inline attachments (WebArchive), and `<blockquote type="cite">` quoted thread!
+        let beforeCopyCount = NSPasteboard.general.changeCount
+        if !pressMenuItem(in: appElem, cmdChar: "C") {
+            sendKeystroke(keyCode: 8, flags: .maskCommand)
+        }
+        try? await Task.sleep(nanoseconds: 120_000_000)
+
+        let pb = NSPasteboard.general
+        let webArchiveType1 = NSPasteboard.PasteboardType("Apple Web Archive pasteboard type")
+        let webArchiveType2 = NSPasteboard.PasteboardType("com.apple.webarchive")
+        let appleHTMLType = NSPasteboard.PasteboardType("Apple HTML pasteboard type")
+
+        let liveArchiveData: Data?
+        let liveHTML: String?
+        let livePlainText: String?
+
+        if pb.changeCount != beforeCopyCount {
+            liveArchiveData = pb.data(forType: webArchiveType1) ?? pb.data(forType: webArchiveType2) ?? self.lastCapturedWebArchiveData
+            liveHTML = pb.string(forType: .html)
+                ?? pb.string(forType: appleHTMLType)
+                ?? MailHTMLPreserver.extractHTMLFromWebArchive(liveArchiveData)
+                ?? self.lastCapturedFullHTML
+            livePlainText = pb.string(forType: .string) ?? self.lastCapturedFullPlainText
+        } else {
+            liveArchiveData = self.lastCapturedWebArchiveData
+            liveHTML = self.lastCapturedFullHTML
+            livePlainText = self.lastCapturedFullPlainText
+        }
+
+        // 5. Build the updated pasteboard preserving formatting in the reply AND keeping the quoted block untouched
+        pb.clearContents()
+
+        let (_, quotedPlainSuffix) = MailHTMLPreserver.splitMailPlainText(livePlainText ?? "")
+        let finalPlainText = quotedPlainSuffix.isEmpty
+            ? replyToApply
+            : (replyToApply + "\n\n" + quotedPlainSuffix)
+
+        if let liveHTML, !liveHTML.isEmpty {
+            let (replyHTML, quotedHTML) = MailHTMLPreserver.splitMailHTML(liveHTML)
+            let updatedReplyHTML = MailHTMLPreserver.applyUpdatedText(to: replyHTML, newPlainText: replyToApply)
+            let finalHTML = updatedReplyHTML + quotedHTML
+
+            self.lastCapturedFullHTML = finalHTML
+            self.lastCapturedFullPlainText = finalPlainText
+
+            if let liveArchiveData,
+               let updatedArchive = MailHTMLPreserver.updateHTMLInWebArchive(liveArchiveData, newHTML: finalHTML) {
+                self.lastCapturedWebArchiveData = updatedArchive
+                pb.setData(updatedArchive, forType: webArchiveType1)
+                pb.setData(updatedArchive, forType: webArchiveType2)
+            }
+
+            if let htmlData = finalHTML.data(using: .utf8) {
+                pb.setData(htmlData, forType: .html)
+                pb.setData(htmlData, forType: appleHTMLType)
+            }
+            pb.setString(finalPlainText, forType: .string)
+        } else {
+            pb.setString(finalPlainText, forType: .string)
+        }
+
+        // 6. Paste (⌘V) the rich HTML / WebArchive back into the selected `webArea`
         if !pressMenuItem(in: appElem, cmdChar: "V") {
             sendKeystroke(keyCode: 9, flags: .maskCommand)
         }
@@ -419,8 +939,6 @@ final class MailIntegrationService: ObservableObject {
 
     // MARK: - Language-Independent Menu Item Invoker (`AXMenuItemCmdChar`)
 
-    /// Finds a menu bar item in the target application by its keyboard shortcut character (e.g. "A", "C", "V")
-    /// with default Command modifier (0) and triggers `kAXPressAction`. Works in French, English, and all locales!
     private func pressMenuItem(in appElem: AXUIElement, cmdChar: String) -> Bool {
         var menuBarRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(appElem, kAXMenuBarAttribute as CFString, &menuBarRef) == .success,
@@ -439,7 +957,6 @@ final class MailIntegrationService: ObservableObject {
         if axStringAttribute(element, kAXRoleAttribute) == "AXMenuItem" {
             if let char = axStringAttribute(element, "AXMenuItemCmdChar")?.uppercased(),
                char == cmdChar {
-                // Ensure modifiers == 0 (pure Command key, not Cmd+Shift or Cmd+Option)
                 let mods = axIntAttribute(element, "AXMenuItemCmdModifiers") ?? 0
                 let enabled = axBoolAttribute(element, kAXEnabledAttribute) ?? true
                 if mods == 0 && enabled {

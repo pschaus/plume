@@ -5,6 +5,16 @@ All notable changes to **Plume** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-11-08
+
+### ✨ Improvements & Fixes (FR / EN)
+- **FR** :
+  - ✨ **Préservation des réponses citées dans Apple Mail** : Ignore automatiquement l'historique cité et la signature lors de l'import (`⌘⇧R`), et conserve intacte la barre de citation (`<blockquote type="cite">`) lors de l'application des corrections (`⌘⇧A`).
+  - 🎨 **Conservation du formatage riche (HTML & WebArchive)** : Préserve le gras, l'italique, le souligné, les liens, les listes et les images intégrées dans votre réponse grâce à un remplacement différentiel au niveau des nœuds texte HTML.
+- **EN**:
+  - ✨ **Quoted Email Reply Preservation**: Automatically ignores quoted thread history and signatures when pulling from Apple Mail (`⌘⇧R`), and keeps Apple Mail's quote bar status (`<blockquote type="cite">`) untouched when applying fixes (`⌘⇧A`).
+  - 🎨 **Rich Text Formatting Preservation (HTML & WebArchive)**: Preserves bold, italic, underline, links, lists, and inline images in your reply via token-level HTML diff patching.
+
 ## [1.0.1] - 2026-11-08
 
 ### ✨ Improvements & Fixes (FR / EN)
