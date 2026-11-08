@@ -409,6 +409,15 @@ final class MailIntegrationService: ObservableObject {
 
     private init() {
         refreshStatus()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshStatus()
+            }
+        }
     }
 
     func startMonitoring(onMailTextChanged: @escaping @MainActor @Sendable (String) -> Void) {
@@ -417,7 +426,7 @@ final class MailIntegrationService: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.refreshStatus()
-                if self.isMailFrontmost && self.isAccessibilityTrusted {
+                if self.isMailFrontmost && self.isAccessibilityTrusted && self.mailWindowFrame != nil {
                     if let text = self.readComposeTextFastViaAXTree(),
                        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                        text != self.lastCapturedMailText {
@@ -437,12 +446,10 @@ final class MailIntegrationService: ObservableObject {
         isMailRunning = (mailApp != nil)
 
         let frontApp = NSWorkspace.shared.frontmostApplication
-        let ourBundleID = Bundle.main.bundleIdentifier
         isMailFrontmost = (frontApp?.bundleIdentifier == "com.apple.mail")
-            || (frontApp?.bundleIdentifier == ourBundleID && mailWindowFrame != nil)
 
-        if let pid = mailApp?.processIdentifier {
-            mailWindowFrame = findMailWindowFrame(pid: pid)
+        if isMailFrontmost, let pid = mailApp?.processIdentifier {
+            mailWindowFrame = findFrontmostComposeWindowFrame(pid: pid)
         } else {
             mailWindowFrame = nil
         }
@@ -459,41 +466,37 @@ final class MailIntegrationService: ObservableObject {
         }
     }
 
-    // MARK: - Window Frame Detection
+    // MARK: - Window Frame Detection (Only Active Frontmost Compose Window)
 
-    private func findMailWindowFrame(pid: pid_t) -> CGRect? {
-        if isAccessibilityTrusted {
-            let appElem = AXUIElementCreateApplication(pid)
-            if let (composeWin, _) = findComposeWindowAndWebArea(in: appElem),
-               let rect = axFrame(of: composeWin),
-               rect.width > 250, rect.height > 200 {
-                return convertQuartzToCocoaScreenRect(rect)
+    private func findFrontmostComposeWindowFrame(pid: pid_t) -> CGRect? {
+        guard isAccessibilityTrusted else { return nil }
+        let appElem = AXUIElementCreateApplication(pid)
+
+        var frontWinRef: CFTypeRef?
+        var candidateWin: AXUIElement?
+        if AXUIElementCopyAttributeValue(appElem, kAXFocusedWindowAttribute as CFString, &frontWinRef) == .success,
+           let w = frontWinRef {
+            candidateWin = (w as! AXUIElement)
+        } else if AXUIElementCopyAttributeValue(appElem, kAXMainWindowAttribute as CFString, &frontWinRef) == .success,
+                  let w = frontWinRef {
+            candidateWin = (w as! AXUIElement)
+        } else {
+            var windowsRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(appElem, kAXWindowsAttribute as CFString, &windowsRef) == .success,
+               let windows = windowsRef as? [AXUIElement] {
+                candidateWin = windows.first
             }
         }
 
-        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-        guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+        guard let win = candidateWin else { return nil }
+        let hasMailboxOutline = containsRole(in: win, role: "AXOutline", maxDepth: 6)
+        guard !hasMailboxOutline,
+              findEditableWebArea(in: win, maxDepth: 14) != nil,
+              let rect = axFrame(of: win),
+              rect.width > 250, rect.height > 200 else {
             return nil
         }
-
-        for entry in windowList {
-            guard let ownerPID = entry[kCGWindowOwnerPID as String] as? pid_t,
-                  ownerPID == pid,
-                  let layer = entry[kCGWindowLayer as String] as? Int,
-                  layer == 0,
-                  let boundsDict = entry[kCGWindowBounds as String] as? [String: CGFloat] else {
-                continue
-            }
-            let x = boundsDict["X"] ?? 0
-            let y = boundsDict["Y"] ?? 0
-            let w = boundsDict["Width"] ?? 0
-            let h = boundsDict["Height"] ?? 0
-            if w > 300 && h > 220 {
-                let quartzRect = CGRect(x: x, y: y, width: w, height: h)
-                return convertQuartzToCocoaScreenRect(quartzRect)
-            }
-        }
-        return nil
+        return convertQuartzToCocoaScreenRect(rect)
     }
 
     private func convertQuartzToCocoaScreenRect(_ quartzRect: CGRect) -> CGRect {
@@ -538,12 +541,6 @@ final class MailIntegrationService: ObservableObject {
 
         for win in windows {
             if let webArea = findEditableWebArea(in: win, requireExplicitEditableAttr: true, maxDepth: 14) {
-                return (win, webArea)
-            }
-        }
-
-        for win in windows {
-            if let webArea = findEditableWebArea(in: win, maxDepth: 14) {
                 return (win, webArea)
             }
         }
@@ -629,7 +626,7 @@ final class MailIntegrationService: ObservableObject {
 
     // MARK: - 1. Pull Text from Active Apple Mail Compose Window (Excluding Quoted Thread)
 
-    func pullTextFromMail() async -> Result<String, MailIntegrationError> {
+    func pullTextFromMail(activatePlumeAfterPull: Bool = true) async -> Result<String, MailIntegrationError> {
         refreshStatus()
         guard isAccessibilityTrusted else {
             requestAccessibilityPermission()
@@ -671,7 +668,9 @@ final class MailIntegrationService: ObservableObject {
         // Deselect by pressing Left Arrow (keyCode 123) so cursor stays at the top of the reply
         sendKeystroke(keyCode: 123, flags: [])
 
-        NSApp.activate(ignoringOtherApps: true)
+        if activatePlumeAfterPull {
+            NSApp.activate(ignoringOtherApps: true)
+        }
 
         if NSPasteboard.general.changeCount != initialChangeCount {
             let pb = NSPasteboard.general

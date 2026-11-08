@@ -5,6 +5,14 @@ All notable changes to **Plume** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-11-08
+
+### ✨ Improvements & Fixes (FR / EN)
+- **FR** :
+  - ✨ **Pastille flottante contextuelle** : La pastille flottante n'apparaît désormais que lorsqu'une fenêtre de rédaction (*Nouveau message* / *Répondre*) est ouverte au premier plan dans Apple Mail, et disparaît automatiquement le reste du temps.
+- **EN**:
+  - ✨ **Context-Aware Floating Pill**: The floating pill now only appears when an Apple Mail compose/reply window is active in the foreground, and automatically hides everywhere else.
+
 ## [1.0.2] - 2026-11-08
 
 ### ✨ Improvements & Fixes (FR / EN)

@@ -174,9 +174,9 @@ final class SpellCheckerViewModel: ObservableObject {
 
     // MARK: - Apple Mail Actions
 
-    func pullFromMailAndCheck() async {
+    func pullFromMailAndCheck(activatePlumeAfterPull: Bool = true) async {
         errorMessage = nil
-        let pullResult = await MailIntegrationService.shared.pullTextFromMail()
+        let pullResult = await MailIntegrationService.shared.pullTextFromMail(activatePlumeAfterPull: activatePlumeAfterPull)
         switch pullResult {
         case .success(let mailText):
             self.text = mailText

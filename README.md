@@ -50,7 +50,7 @@ Clean color-coded inline underlines (**Red** = Spelling, **Blue** = Grammar, **A
 - **🌍 Automatic Language Recognition**:
   - Automatically detects the language of your draft (`🇫🇷 Français`, `🇬🇧 English`, `🇪🇸 Español`, `🇩🇪 Deutsch`, `🇳🇱 Nederlands`, `🇮🇹 Italiano`, `🇵🇹 Português`) and provides explanations in that same language.
 - **✉️ Native Apple Mail Integration**:
-  - **Floating Pill**: Anchors to the bottom-right corner of active Apple Mail windows for 1-click checking and fixing.
+  - **Floating Pill**: Appears in the bottom-right corner **only** when an Apple Mail compose/reply window is active in the foreground, and hides automatically everywhere else.
   - **Pull from Apple Mail (`⌘⇧R`)**: Reads only your new reply from Apple Mail's active compose window, automatically ignoring quoted email history and signatures below.
   - **Apply to Apple Mail (`⌘⇧A`)**: Updates the text directly inside Apple Mail's active compose window while preserving rich-text formatting (bold, italic, links, lists), inline attachments, signatures, and the quoted reply thread (`<blockquote type="cite">`).
   - **macOS System Service (`⌘⇧;`)**: Select text in any macOS app → Right-click → *Services* → *Check Spelling & Grammar with Plume*.

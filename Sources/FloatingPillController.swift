@@ -49,9 +49,12 @@ final class FloatingPillController {
 
     private func bindPositioning() {
         MailIntegrationService.shared.$mailWindowFrame
-            .combineLatest(SettingsManager.shared.$showFloatingPill)
+            .combineLatest(
+                MailIntegrationService.shared.$isMailFrontmost,
+                SettingsManager.shared.$showFloatingPill
+            )
             .receive(on: RunLoop.main)
-            .sink { [weak self] _, _ in
+            .sink { [weak self] _, _, _ in
                 self?.updateVisibilityAndPosition()
             }
             .store(in: &cancellables)
@@ -59,25 +62,19 @@ final class FloatingPillController {
 
     func updateVisibilityAndPosition() {
         guard let panel else { return }
-        guard SettingsManager.shared.showFloatingPill else {
+        guard SettingsManager.shared.showFloatingPill,
+              MailIntegrationService.shared.isMailFrontmost,
+              let mailRect = MailIntegrationService.shared.mailWindowFrame else {
             panel.orderOut(nil)
             return
         }
 
         let pillSize = NSSize(width: 340, height: 52)
-        if let mailRect = MailIntegrationService.shared.mailWindowFrame {
-            // Anchor to bottom-right corner of Apple Mail window
-            let originX = max(20, mailRect.maxX - pillSize.width - 24)
-            let originY = max(40, mailRect.minY + 20)
-            panel.setFrame(NSRect(origin: NSPoint(x: originX, y: originY), size: pillSize), display: true)
-            panel.orderFrontRegardless()
-        } else if let screen = NSScreen.main {
-            let visible = screen.visibleFrame
-            let originX = visible.maxX - pillSize.width - 28
-            let originY = visible.minY + 28
-            panel.setFrame(NSRect(origin: NSPoint(x: originX, y: originY), size: pillSize), display: true)
-            panel.orderFrontRegardless()
-        }
+        // Anchor to bottom-right corner of the active Apple Mail compose window
+        let originX = max(20, mailRect.maxX - pillSize.width - 24)
+        let originY = max(40, mailRect.minY + 20)
+        panel.setFrame(NSRect(origin: NSPoint(x: originX, y: originY), size: pillSize), display: true)
+        panel.orderFrontRegardless()
     }
 }
 
@@ -137,7 +134,7 @@ struct FloatingPillView: View {
             // Quick Actions on Pill
             Button {
                 Task {
-                    await viewModel.pullFromMailAndCheck()
+                    await viewModel.pullFromMailAndCheck(activatePlumeAfterPull: false)
                 }
             } label: {
                 Label(l10n.pillCheckMailButton, systemImage: "arrow.triangle.2.circlepath")
