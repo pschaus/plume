@@ -136,12 +136,18 @@ final class LLMService: Sendable {
 
         do {
             var result = try JSONDecoder().decode(SpellCheckResult.self, from: data)
-            // Keep only genuine issues whose `original` exists in `text` and differs from `suggestion`
-            result.issues = result.issues.filter { issue in
-                !issue.original.isEmpty &&
-                issue.original != issue.suggestion &&
-                text.contains(issue.original)
+            // Keep only genuine issues whose `original` exists in `text` (matching smart quotes/spaces) and differs from `suggestion`
+            var matchedIssues: [SpellIssue] = []
+            for var issue in result.issues {
+                guard !issue.original.isEmpty, issue.original != issue.suggestion else { continue }
+                if let range = MailHTMLPreserver.findBestMatchRange(of: issue.original, in: text) {
+                    let exactOriginal = String(text[range])
+                    guard exactOriginal != issue.suggestion else { continue }
+                    issue.original = exactOriginal
+                    matchedIssues.append(issue)
+                }
             }
+            result.issues = matchedIssues
             return result
         } catch {
             throw LLMError.decodingError("\(error.localizedDescription) — Raw: \(cleanedJSON.prefix(200))")
@@ -342,11 +348,16 @@ final class LLMService: Sendable {
         request.timeoutInterval = 45
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        let clippedText = text.count > 4000 ? String(text.prefix(4000)) : text
         let body: [String: Any] = [
             "model": model,
             "stream": false,
             "think": false,
             "format": jsonSchema,
+            "options": [
+                "temperature": 0.0,
+                "num_predict": 1024
+            ],
             "messages": [
                 [
                     "role": "system",
@@ -354,7 +365,7 @@ final class LLMService: Sendable {
                 ],
                 [
                     "role": "user",
-                    "content": text
+                    "content": clippedText
                 ]
             ]
         ]

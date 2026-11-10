@@ -6,7 +6,8 @@ import SwiftUI
 final class FloatingPillController {
     static let shared = FloatingPillController()
 
-    private var panel: NSPanel?
+    private var panel: NonKeyFloatingPanel?
+    private var isOrderedFront: Bool = false
     private var cancellables = Set<AnyCancellable>()
     var onOpenMainEditor: (() -> Void)?
 
@@ -20,21 +21,25 @@ final class FloatingPillController {
             viewModel: SpellCheckerViewModel.shared,
             mailService: MailIntegrationService.shared,
             settings: SettingsManager.shared,
+            overlayController: MailInlineOverlayController.shared,
             onOpenEditor: { [weak self] in
                 self?.onOpenMainEditor?()
             }
         )
 
         let hostingView = NSHostingView(rootView: pillView)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 340, height: 52)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 376, height: 52)
 
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 340, height: 52),
+        let panel = NonKeyFloatingPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 376, height: 52),
             styleMask: [.nonactivatingPanel, .borderless, .hudWindow],
             backing: .buffered,
             defer: false
         )
+        panel.allowKeyFocus = false
+        panel.becomesKeyOnlyIfNeeded = true
         panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.backgroundColor = .clear
@@ -66,15 +71,22 @@ final class FloatingPillController {
               MailIntegrationService.shared.isMailFrontmost,
               let mailRect = MailIntegrationService.shared.mailWindowFrame else {
             panel.orderOut(nil)
+            isOrderedFront = false
             return
         }
 
-        let pillSize = NSSize(width: 340, height: 52)
+        let pillSize = NSSize(width: 376, height: 52)
         // Anchor to bottom-right corner of the active Apple Mail compose window
         let originX = max(20, mailRect.maxX - pillSize.width - 24)
         let originY = max(40, mailRect.minY + 20)
-        panel.setFrame(NSRect(origin: NSPoint(x: originX, y: originY), size: pillSize), display: true)
-        panel.orderFrontRegardless()
+        let targetFrame = NSRect(origin: NSPoint(x: originX, y: originY), size: pillSize)
+        if panel.frame != targetFrame {
+            panel.setFrame(targetFrame, display: true)
+        }
+        if !isOrderedFront {
+            panel.orderFrontRegardless()
+            isOrderedFront = true
+        }
     }
 }
 
@@ -82,14 +94,21 @@ struct FloatingPillView: View {
     @ObservedObject var viewModel: SpellCheckerViewModel
     @ObservedObject var mailService: MailIntegrationService
     @ObservedObject var settings: SettingsManager
+    @ObservedObject var overlayController: MailInlineOverlayController
     var onOpenEditor: () -> Void
 
     private var l10n: L10n { settings.l10n }
 
     var body: some View {
-        HStack(spacing: 10) {
-            // Circular status badge
-            Button(action: onOpenEditor) {
+        HStack(spacing: 8) {
+            // Circular status badge (toggles inline popover in Mail when issues exist, or opens editor)
+            Button {
+                if !viewModel.result.issues.isEmpty {
+                    overlayController.togglePopoverFromPill()
+                } else {
+                    onOpenEditor()
+                }
+            } label: {
                 HStack(spacing: 7) {
                     ZStack {
                         Circle()
@@ -130,6 +149,26 @@ struct FloatingPillView: View {
             .buttonStyle(.plain)
 
             Spacer(minLength: 4)
+
+            // Toggle inline highlighting in the current email
+            Button {
+                overlayController.toggleInlineHighlight()
+            } label: {
+                Image(systemName: overlayController.isInlineHighlightEnabled ? "highlighter" : "eye.slash")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(
+                        overlayController.isInlineHighlightEnabled
+                            ? Color(red: 0.38, green: 0.34, blue: 0.92)
+                            : .secondary
+                    )
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help(
+                overlayController.isInlineHighlightEnabled
+                    ? l10n.pillToggleHighlightOffTooltip
+                    : l10n.pillToggleHighlightOnTooltip
+            )
 
             // Quick Actions on Pill
             Button {
@@ -181,6 +220,9 @@ struct FloatingPillView: View {
         if viewModel.isChecking {
             return .blue
         }
+        if !overlayController.isInlineHighlightEnabled {
+            return .gray
+        }
         if viewModel.result.issues.isEmpty {
             return Color(red: 0.14, green: 0.65, blue: 0.42) // Emerald Green
         }
@@ -190,6 +232,9 @@ struct FloatingPillView: View {
     private var statusSubtitle: String {
         if viewModel.isChecking {
             return l10n.pillCheckingStatus(provider: settings.selectedProvider.rawValue)
+        }
+        if !overlayController.isInlineHighlightEnabled {
+            return l10n.pillHighlightDisabledStatus
         }
         let count = viewModel.result.issues.count
         if count == 0 {

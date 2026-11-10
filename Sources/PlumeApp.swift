@@ -16,12 +16,14 @@ struct PlumeApp: App {
                 mailService: mailService
             )
             .onAppear {
-                FloatingPillController.shared.onOpenMainEditor = {
+                let openMain: () -> Void = {
                     NSApp.activate(ignoringOtherApps: true)
                     for window in NSApp.windows where !(window is NSPanel) {
                         window.makeKeyAndOrderFront(nil)
                     }
                 }
+                FloatingPillController.shared.onOpenMainEditor = openMain
+                MailInlineOverlayController.shared.onOpenMainEditor = openMain
             }
         }
         .commands {
@@ -110,14 +112,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Start monitoring Apple Mail window position & text
         MailIntegrationService.shared.startMonitoring { newMailText in
-            if SettingsManager.shared.autoCheckInMail {
+            if SettingsManager.shared.autoCheckInMail && !SpellCheckerViewModel.shared.isChecking {
                 SpellCheckerViewModel.shared.text = newMailText
-                SpellCheckerViewModel.shared.scheduleDebouncedCheck()
+                SpellCheckerViewModel.shared.scheduleDebouncedCheck(delayNanoseconds: 2_200_000_000)
             }
         }
 
-        // Trigger Floating Pill initialization
+        // Trigger Floating Pill & In-Mail Inline Underline Overlay initialization
         _ = FloatingPillController.shared
+        _ = MailInlineOverlayController.shared
 
         if CommandLine.arguments.contains("--mode=light") {
             SpellCheckerViewModel.shared.displayMode = .lightIndicator
@@ -126,12 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         SpellCheckerViewModel.shared.selectedIssueID = SpellCheckerViewModel.shared.result.issues.first?.id
 
-        // Run initial spell check & check for updates on launch
-        if !CommandLine.arguments.contains("--skip-initial-check") {
-            Task {
-                await SpellCheckerViewModel.shared.runSpellCheck()
-            }
-        }
+        // Check for updates on launch (sample text is already pre-checked so we don't block Ollama at startup)
         Task {
             await UpdateCheckerService.shared.checkForUpdates(manual: false)
         }

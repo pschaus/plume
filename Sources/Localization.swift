@@ -254,6 +254,22 @@ struct L10n {
         lang == .french ? "Tout corriger" : "Fix All"
     }
 
+    var pillToggleHighlightOffTooltip: String {
+        lang == .french
+            ? "Désactiver le surlignage dans ce mail"
+            : "Disable inline highlighting in this email"
+    }
+
+    var pillToggleHighlightOnTooltip: String {
+        lang == .french
+            ? "Réactiver le surlignage dans ce mail"
+            : "Re-enable inline highlighting in this email"
+    }
+
+    var pillHighlightDisabledStatus: String {
+        lang == .french ? "Surlignage désactivé" : "Highlighting paused"
+    }
+
     func pillCheckingStatus(provider: String) -> String {
         lang == .french ? "Analyse (\(provider))..." : "Checking with \(provider)..."
     }

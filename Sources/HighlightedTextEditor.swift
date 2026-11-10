@@ -56,7 +56,8 @@ struct HighlightedTextEditor: NSViewRepresentable {
         context.coordinator.parent = self
         guard let textView = context.coordinator.textView else { return }
 
-        if textView.string != text {
+        let textChanged = (textView.string != text)
+        if textChanged {
             let selectedRanges = textView.selectedRanges
             context.coordinator.isProgrammaticUpdate = true
             textView.string = text
@@ -64,7 +65,12 @@ struct HighlightedTextEditor: NSViewRepresentable {
             context.coordinator.isProgrammaticUpdate = false
         }
 
-        context.coordinator.applyHighlights()
+        if textChanged
+            || context.coordinator.lastAppliedText != text
+            || context.coordinator.lastAppliedIssues != issues
+            || context.coordinator.lastAppliedSelectedID != selectedIssueID {
+            context.coordinator.applyHighlights()
+        }
     }
 
     @MainActor
@@ -72,6 +78,9 @@ struct HighlightedTextEditor: NSViewRepresentable {
         var parent: HighlightedTextEditor
         weak var textView: ClickableSpellTextView?
         var isProgrammaticUpdate = false
+        var lastAppliedText: String = ""
+        var lastAppliedIssues: [SpellIssue] = []
+        var lastAppliedSelectedID: UUID? = nil
         private var issueRanges: [(range: NSRange, issue: SpellIssue)] = []
 
         init(_ parent: HighlightedTextEditor) {
@@ -88,7 +97,15 @@ struct HighlightedTextEditor: NSViewRepresentable {
         func applyHighlights() {
             guard let tv = textView, let storage = tv.textStorage else { return }
             let fullString = tv.string
+            lastAppliedText = fullString
+            lastAppliedIssues = parent.issues
+            lastAppliedSelectedID = parent.selectedIssueID
+
             let fullRange = NSRange(location: 0, length: (fullString as NSString).length)
+
+            let prevProgrammatic = isProgrammaticUpdate
+            isProgrammaticUpdate = true
+            defer { isProgrammaticUpdate = prevProgrammatic }
 
             storage.beginEditing()
 

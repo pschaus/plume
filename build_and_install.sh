@@ -31,8 +31,14 @@ if [ -f "$SCRIPT_DIR/Resources/PlumeLogo.png" ]; then
 fi
 chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
-echo "🔏 Ad-hoc signing $APP_BUNDLE..."
-codesign --force --deep --identifier com.pschaus.Plume --sign - "$APP_BUNDLE"
+DEV_ID=$(security find-identity -v -p codesigning 2>/dev/null | grep "Developer ID Application" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+if [ -n "$DEV_ID" ]; then
+    echo "🔏 Signing $APP_BUNDLE with $DEV_ID..."
+    codesign --force --deep --options runtime --identifier com.pschaus.Plume --sign "$DEV_ID" "$APP_BUNDLE"
+else
+    echo "🔏 Ad-hoc signing $APP_BUNDLE..."
+    codesign --force --deep --identifier com.pschaus.Plume --sign - "$APP_BUNDLE"
+fi
 
 # Install into /Applications if writable, otherwise ~/Applications
 if [ -w "/Applications" ]; then
@@ -42,15 +48,15 @@ else
     mkdir -p "$INSTALL_DIR"
 fi
 
-# Stop previous Plume instance
-pkill -f "/Plume.app/" 2>/dev/null || true
+# Stop any previous Plume instance (both /Applications and build/)
+killall -9 Plume 2>/dev/null || true
+pkill -9 -f "Plume.app/Contents/MacOS/Plume" 2>/dev/null || true
 
 echo "🚀 Installing to $INSTALL_DIR/$APP_NAME.app..."
 rm -rf "$INSTALL_DIR/$APP_NAME.app"
 cp -R "$APP_BUNDLE" "$INSTALL_DIR/$APP_NAME.app"
 
-# Refresh macOS Services menu & LaunchServices icon registration
-/System/Library/CoreServices/pbs -update 2>/dev/null || true
+# Refresh LaunchServices icon registration
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$INSTALL_DIR/$APP_NAME.app" 2>/dev/null || true
 
 echo "💿 Building local DMG installer in dist-macos/Plume-macOS.dmg..."

@@ -63,6 +63,8 @@ final class SpellCheckerViewModel: ObservableObject {
     @Published var selectedIssueID: UUID? = nil
 
     private var debounceTask: Task<Void, Never>?
+    private var activeCheckTask: Task<Void, Never>?
+    private var checkGeneration: Int = 0
 
     var filteredIssues: [SpellIssue] {
         guard let filter = selectedCategoryFilter else {
@@ -71,7 +73,7 @@ final class SpellCheckerViewModel: ObservableObject {
         return result.issues.filter { $0.type == filter }
     }
 
-    func scheduleDebouncedCheck(delayNanoseconds: UInt64 = 1_400_000_000) {
+    func scheduleDebouncedCheck(delayNanoseconds: UInt64 = 1_800_000_000) {
         debounceTask?.cancel()
         debounceTask = Task {
             try? await Task.sleep(nanoseconds: delayNanoseconds)
@@ -81,44 +83,63 @@ final class SpellCheckerViewModel: ObservableObject {
     }
 
     func runSpellCheck() async {
+        debounceTask?.cancel()
+        activeCheckTask?.cancel()
+
         let currentText = text
         guard !currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             result = .empty
             errorMessage = nil
+            isChecking = false
             return
         }
+
+        checkGeneration += 1
+        let myGeneration = checkGeneration
 
         let settings = SettingsManager.shared
         let provider = settings.selectedProvider
         let model = settings.selectedModel
         let apiKey = settings.apiKey(for: provider)
+        let endpoint = settings.ollamaEndpoint
 
         isChecking = true
         errorMessage = nil
 
-        do {
-            let checkResult = try await LLMService.shared.checkText(
-                currentText,
-                provider: provider,
-                model: model,
-                apiKey: apiKey,
-                ollamaEndpoint: settings.ollamaEndpoint
-            )
-            self.result = checkResult
-            if let first = checkResult.issues.first {
-                self.selectedIssueID = first.id
+        let task = Task { @MainActor in
+            do {
+                let checkResult = try await LLMService.shared.checkText(
+                    currentText,
+                    provider: provider,
+                    model: model,
+                    apiKey: apiKey,
+                    ollamaEndpoint: endpoint
+                )
+                guard !Task.isCancelled, myGeneration == self.checkGeneration else { return }
+                self.result = checkResult
+                if let first = checkResult.issues.first {
+                    self.selectedIssueID = first.id
+                }
+                self.isChecking = false
+            } catch {
+                if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                    return
+                }
+                guard myGeneration == self.checkGeneration else { return }
+                self.errorMessage = error.localizedDescription
+                self.isChecking = false
             }
-        } catch {
-            self.errorMessage = error.localizedDescription
         }
-
-        isChecking = false
+        activeCheckTask = task
+        await task.value
     }
 
     // MARK: - Fine-Grained Actions
 
     func acceptIssue(_ issue: SpellIssue, syncToMail: Bool = false) {
-        if let range = text.range(of: issue.original) {
+        let locatedRect = MailInlineOverlayController.shared.snapshot?.locatedIssues
+            .first(where: { $0.issue.id == issue.id })?.primaryRect
+        if let range = MailHTMLPreserver.findBestMatchRange(of: issue.original, in: text) {
             text.replaceSubrange(range, with: issue.suggestion)
         }
         result.issues.removeAll { $0.id == issue.id }
@@ -128,7 +149,7 @@ final class SpellCheckerViewModel: ObservableObject {
         showTransientBanner(SettingsManager.shared.l10n.appliedSingleFix(original: issue.original, suggestion: issue.suggestion))
 
         if syncToMail {
-            pushToMail()
+            pushReplacementsToMail([(original: issue.original, suggestion: issue.suggestion, targetCocoaRect: locatedRect)])
         }
     }
 
@@ -150,10 +171,17 @@ final class SpellCheckerViewModel: ObservableObject {
             ? result.issues
             : result.issues.filter { $0.type == category }
 
+        let currentLocated = MailInlineOverlayController.shared.snapshot?.locatedIssues ?? []
         var count = 0
+        var appliedPairs: [(original: String, suggestion: String, targetCocoaRect: CGRect?)] = []
         for issue in issuesToApply {
-            if let range = text.range(of: issue.original) {
+            let rect = currentLocated.first(where: { $0.issue.id == issue.id })?.primaryRect
+            if let range = MailHTMLPreserver.findBestMatchRange(of: issue.original, in: text) {
                 text.replaceSubrange(range, with: issue.suggestion)
+                appliedPairs.append((original: issue.original, suggestion: issue.suggestion, targetCocoaRect: rect))
+                count += 1
+            } else {
+                appliedPairs.append((original: issue.original, suggestion: issue.suggestion, targetCocoaRect: rect))
                 count += 1
             }
         }
@@ -167,8 +195,8 @@ final class SpellCheckerViewModel: ObservableObject {
 
         showTransientBanner(SettingsManager.shared.l10n.appliedMultipleFixes(count))
 
-        if syncToMail {
-            pushToMail()
+        if syncToMail && !appliedPairs.isEmpty {
+            pushReplacementsToMail(appliedPairs)
         }
     }
 
@@ -184,6 +212,23 @@ final class SpellCheckerViewModel: ObservableObject {
             await runSpellCheck()
         case .failure(let err):
             errorMessage = err.localizedDescription
+        }
+    }
+
+    func pushReplacementsToMail(_ replacements: [(original: String, suggestion: String, targetCocoaRect: CGRect?)]) {
+        errorMessage = nil
+        let currentText = text
+        Task {
+            let applyResult = await MailIntegrationService.shared.applyIssueReplacementsToMail(
+                replacements,
+                fallbackText: currentText
+            )
+            switch applyResult {
+            case .success:
+                showTransientBanner(SettingsManager.shared.l10n.replacedInMailToast)
+            case .failure(let err):
+                errorMessage = SettingsManager.shared.l10n.copiedToClipboardFallback(err.localizedDescription)
+            }
         }
     }
 

@@ -27,6 +27,11 @@ Bring your own cloud API key (**Google Gemini, Anthropic Claude, OpenAI, OpenRou
 
 ## 📸 Screenshots
 
+### Direct In-Mail Integration (*Soulignements, Bulle & Pastille flottante dans Apple Mail*)
+Color-coded inline underlines drawn directly beneath words in Apple Mail's compose window, interactive quick-fix popover on hover, and context-aware floating pill with a 1-click inline highlight toggle:
+
+![Plume — Direct In-Mail Integration](website/screenshot-mail-inline.png)
+
 ### Fine-Grained Editor Mode (*Mode Éditeur détaillé*)
 Full editable email draft on the left and individual suggestion cards on the right (**Accept**, **Accept & Update Mail**, **Ignore**, or customize any suggestion inline):
 
@@ -50,7 +55,8 @@ Clean color-coded inline underlines (**Red** = Spelling, **Blue** = Grammar, **A
 - **🌍 Automatic Language Recognition**:
   - Automatically detects the language of your draft (`🇫🇷 Français`, `🇬🇧 English`, `🇪🇸 Español`, `🇩🇪 Deutsch`, `🇳🇱 Nederlands`, `🇮🇹 Italiano`, `🇵🇹 Português`) and provides explanations in that same language.
 - **✉️ Native Apple Mail Integration**:
-  - **Floating Pill**: Appears in the bottom-right corner **only** when an Apple Mail compose/reply window is active in the foreground, and hides automatically everywhere else.
+  - **Live Inline Underlines & Hover Popover Inside Apple Mail**: Draws color-coded underlines (**Red** = Spelling, **Blue** = Grammar, **Amber** = Style) directly under words in Apple Mail's composer window via `AXBoundsForRange`. Hover over any underlined word (or click the floating pill badge) to apply, customize, or ignore a suggestion right inside Apple Mail.
+  - **Context-Aware Floating Pill**: Appears in the bottom-right corner **only** when an Apple Mail compose/reply window is active in the foreground, and hides automatically everywhere else.
   - **Pull from Apple Mail (`⌘⇧R`)**: Reads only your new reply from Apple Mail's active compose window, automatically ignoring quoted email history and signatures below.
   - **Apply to Apple Mail (`⌘⇧A`)**: Updates the text directly inside Apple Mail's active compose window while preserving rich-text formatting (bold, italic, links, lists), inline attachments, signatures, and the quoted reply thread (`<blockquote type="cite">`).
   - **macOS System Service (`⌘⇧;`)**: Select text in any macOS app → Right-click → *Services* → *Check Spelling & Grammar with Plume*.

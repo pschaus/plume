@@ -5,6 +5,22 @@ All notable changes to **Plume** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-10
+
+### ✨ Improvements & Fixes (FR / EN)
+- **FR** :
+  - ✨ **Soulignements et bulle de correction en direct dans Apple Mail** : Souligne directement les fautes d'orthographe (rouge), de grammaire (bleu) et de style (ambre) dans la fenêtre de rédaction d'Apple Mail, avec une bulle de correction interactive au survol ou au clic sur le badge.
+  - ✨ **Bouton d'activation/désactivation du surlignage sur la pastille flottante** : Nouveau bouton `highlighter` directement sur la pastille flottante pour activer ou masquer à la volée le surlignage dans l'e-mail courant.
+  - 🐛 **Correction du remplacement de texte in-place (`AXReplaceRangeWithText`)** : Utilise l'attribut paramétré natif WebKit `AXReplaceRangeWithText` après sélection de la plage exacte afin d'éviter toute duplication de texte ou décalage de mot lors des corrections dans Apple Mail.
+  - 🐛 **Correction du blocage du bouton « Envoyer » d'Apple Mail avec Antidote (`Anti-Oups!.appex`)** : Empêche l'extension MailKit `Antidote - Anti-Oups!.appex` de retenir indéfiniment le `completionHandler` d'envoi d'Apple Mail lorsqu'un courriel a été corrigé avec Plume.
+  - ⚡ **Optimisation des performances d'Accessibilité** : Filtrage strict des fenêtres non-`AXWindow` et élagage des conteneurs lourds (`AXOutline`, `AXTable`, `AXToolbar`) pour éliminer tout ralentissement lors de la détection des brouillons.
+- **EN**:
+  - ✨ **Live Inline Underlines & Hover Popover Inside Apple Mail**: Draws color-coded spelling (red), grammar (blue), and style (amber) underlines directly inside Apple Mail's compose window with an interactive quick-fix popover on hover or badge click.
+  - ✨ **Inline Highlight Toggle on the Floating Pill**: Added a dedicated `highlighter` toggle button on the floating pill to enable or disable inline underlines in the current email draft with one click.
+  - 🐛 **Reliable In-Place Text Replacement (`AXReplaceRangeWithText`)**: Uses WebKit's native `AXReplaceRangeWithText` parameterized attribute on the exact marker range to prevent text duplication or offset drift when applying fixes in Apple Mail.
+  - 🐛 **Fixed Apple Mail "Send" Button Freeze with Antidote (`Anti-Oups!.appex`)**: Prevents `Antidote - Anti-Oups!.appex` from holding Apple Mail's `allowMessageSendForSession:completionHandler:` callback indefinitely when an email is corrected with Plume.
+  - ⚡ **Accessibility Performance Optimization**: Strictly filters non-`AXWindow` elements and prunes heavy UI containers (`AXOutline`, `AXTable`, `AXToolbar`) to eliminate UI hangs when scanning compose windows.
+
 ## [1.0.3] - 2026-11-08
 
 ### ✨ Improvements & Fixes (FR / EN)
