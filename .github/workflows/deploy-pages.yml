@@ -4,13 +4,14 @@ on:
   push:
     branches:
       - main
-      - gh-pages
+    paths:
+      - 'website/**'
+      - 'Resources/PlumeLogo.png'
+      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: "pages"
@@ -18,33 +19,25 @@ concurrency:
 
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Prepare Pages directory
+      - name: Sync website/ to gh-pages branch
         run: |
-          if [ -d "website" ]; then
-            cp -R Resources/PlumeLogo.png website/logo.png 2>/dev/null || true
-            PLAYLOAD_DIR="website"
-          else
-            PLAYLOAD_DIR="."
-          fi
-          mkdir -p _site
-          cp -R "$PLAYLOAD_DIR"/* _site/
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '_site'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          WORKTREE_TMP="$(mktemp -d)"
+          cp -R website/* "$WORKTREE_TMP/"
+          cp Resources/PlumeLogo.png "$WORKTREE_TMP/logo.png" 2>/dev/null || true
+          touch "$WORKTREE_TMP/.nojekyll"
+          pushd "$WORKTREE_TMP" >/dev/null
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b gh-pages
+          git add .
+          git commit -m "docs: deploy website from main (${GITHUB_SHA::7})"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push -u origin gh-pages --force
+          popd >/dev/null
+          rm -rf "$WORKTREE_TMP"
