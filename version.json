@@ -1,0 +1,11 @@
+{
+  "version": "1.1.1",
+  "name": "Plume v1.1.1",
+  "title": "Plume v1.1.1",
+  "published_at": "2026-11-10T08:29:41.000Z",
+  "notes": "### 🐛 Bug Fixes (FR / EN)\n- **FR** :\n  - 🐛 **Correction des clics sur les onglets Safari et applications tierces** : Empêche les panneaux flottants de Plume d'intercepter les clics de souris en haut de l'écran (barre d'onglets Safari) ou sur d'autres bureaux macOS lorsque Mail est en arrière-plan (`defer: true`, `ignoresMouseEvents = true` hors affichage et détection stricte de la fenêtre active).\n- **EN**:\n  - 🐛 **Fixed Mouse Clicks on Safari Tabs & Background Apps**: Prevents Plume's floating overlay panels from intercepting mouse clicks over Safari's tab bar or across macOS Spaces when Apple Mail is in the background (`defer: true`, `ignoresMouseEvents = true` when hidden, and strict frontmost compose window detection).",
+  "html_url": "https://github.com/pschaus/plume/releases/tag/v1.1.1",
+  "assets": {
+    "macos": "https://github.com/pschaus/plume/releases/latest/download/Plume_1.1.1_universal.dmg"
+  }
+}
