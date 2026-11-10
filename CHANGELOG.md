@@ -5,6 +5,14 @@ All notable changes to **Plume** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-11-10
+
+### 🐛 Bug Fixes (FR / EN)
+- **FR** :
+  - 🐛 **Correction des clics sur les onglets Safari et applications tierces** : Empêche les panneaux flottants de Plume d'intercepter les clics de souris en haut de l'écran (barre d'onglets Safari) ou sur d'autres bureaux macOS lorsque Mail est en arrière-plan (`defer: true`, `ignoresMouseEvents = true` hors affichage et détection stricte de la fenêtre active).
+- **EN**:
+  - 🐛 **Fixed Mouse Clicks on Safari Tabs & Background Apps**: Prevents Plume's floating overlay panels from intercepting mouse clicks over Safari's tab bar or across macOS Spaces when Apple Mail is in the background (`defer: true`, `ignoresMouseEvents = true` when hidden, and strict frontmost compose window detection).
+
 ## [1.1.0] - 2026-11-10
 
 ### ✨ Improvements & Fixes (FR / EN)

@@ -712,9 +712,12 @@ final class MailIntegrationService: ObservableObject {
         }
 
         let frontApp = NSWorkspace.shared.frontmostApplication
-        let anyMainEditorKey = NSApp.windows.contains { !($0 is NSPanel) && $0.isVisible && $0.isKeyWindow }
-        let isFloatingPlumePanel = (frontApp?.bundleIdentifier == Bundle.main.bundleIdentifier && !anyMainEditorKey && mailApp != nil)
-        let newFrontmost = (frontApp?.bundleIdentifier == "com.apple.mail") || isFloatingPlumePanel
+        let isEditingInlinePopover = (
+            frontApp?.bundleIdentifier == Bundle.main.bundleIdentifier &&
+            MailInlineOverlayController.shared.isPopoverKeyFocusAllowed &&
+            mailApp != nil
+        )
+        let newFrontmost = (frontApp?.bundleIdentifier == "com.apple.mail") || isEditingInlinePopover
         if isMailFrontmost != newFrontmost {
             isMailFrontmost = newFrontmost
         }
@@ -755,12 +758,6 @@ final class MailIntegrationService: ObservableObject {
         } else if AXUIElementCopyAttributeValue(appElem, kAXMainWindowAttribute as CFString, &frontWinRef) == .success,
                   let w = frontWinRef {
             candidateWin = (w as! AXUIElement)
-        } else {
-            var windowsRef: CFTypeRef?
-            if AXUIElementCopyAttributeValue(appElem, kAXWindowsAttribute as CFString, &windowsRef) == .success,
-               let windows = windowsRef as? [AXUIElement] {
-                candidateWin = windows.first
-            }
         }
 
         guard let win = candidateWin else { return nil }
@@ -1150,7 +1147,7 @@ final class MailIntegrationService: ObservableObject {
         let webAreaCocoaRect: CGRect
         if let scrollQuartz = scrollAreaQuartz, scrollQuartz.width > 80, scrollQuartz.height > 40 {
             let rawScrollCocoa = convertQuartzToCocoaScreenRect(scrollQuartz)
-            let clipped = rawScrollCocoa.intersection(composeCocoaRect.insetBy(dx: 4, dy: 8))
+            let clipped = rawScrollCocoa.intersection(safeBodyClipRect)
             webAreaCocoaRect = clipped.isNull ? safeBodyClipRect : clipped
         } else if let webQuartz = axFrame(of: webArea), webQuartz.width > 80, webQuartz.height > 40 {
             // Intersect with safe body clip rect in case webArea reports full scrollable content height

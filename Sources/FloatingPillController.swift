@@ -34,17 +34,18 @@ final class FloatingPillController {
             contentRect: NSRect(x: 0, y: 0, width: 376, height: 52),
             styleMask: [.nonactivatingPanel, .borderless, .hudWindow],
             backing: .buffered,
-            defer: false
+            defer: true
         )
         panel.allowKeyFocus = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
         panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.collectionBehavior = [.moveToActiveSpace]
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
+        panel.ignoresMouseEvents = true
         panel.isMovableByWindowBackground = true
         panel.contentView = hostingView
 
@@ -58,9 +59,10 @@ final class FloatingPillController {
                 MailIntegrationService.shared.$isMailFrontmost,
                 SettingsManager.shared.$showFloatingPill
             )
-            .receive(on: RunLoop.main)
             .sink { [weak self] _, _, _ in
-                self?.updateVisibilityAndPosition()
+                DispatchQueue.main.async {
+                    self?.updateVisibilityAndPosition()
+                }
             }
             .store(in: &cancellables)
     }
@@ -70,6 +72,7 @@ final class FloatingPillController {
         guard SettingsManager.shared.showFloatingPill,
               MailIntegrationService.shared.isMailFrontmost,
               let mailRect = MailIntegrationService.shared.mailWindowFrame else {
+            panel.ignoresMouseEvents = true
             panel.orderOut(nil)
             isOrderedFront = false
             return
@@ -83,6 +86,7 @@ final class FloatingPillController {
         if panel.frame != targetFrame {
             panel.setFrame(targetFrame, display: true)
         }
+        panel.ignoresMouseEvents = false
         if !isOrderedFront {
             panel.orderFrontRegardless()
             isOrderedFront = true

@@ -36,6 +36,7 @@ final class MailInlineOverlayController: ObservableObject {
     @Published var isPopoverVisible: Bool = false
     @Published var isPinnedByPill: Bool = false
     @Published var isInlineHighlightEnabled: Bool = true
+    private(set) var isPopoverKeyFocusAllowed: Bool = false
 
     private var underlinePanel: NonKeyFloatingPanel?
     private var popoverPanel: NonKeyFloatingPanel?
@@ -63,14 +64,14 @@ final class MailInlineOverlayController: ObservableObject {
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
             styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
-            defer: false
+            defer: true
         )
         uPanel.allowKeyFocus = false
         uPanel.becomesKeyOnlyIfNeeded = true
         uPanel.isFloatingPanel = true
         uPanel.hidesOnDeactivate = false
         uPanel.level = .floating
-        uPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        uPanel.collectionBehavior = [.moveToActiveSpace]
         uPanel.backgroundColor = .clear
         uPanel.isOpaque = false
         uPanel.hasShadow = false
@@ -91,23 +92,24 @@ final class MailInlineOverlayController: ObservableObject {
             contentRect: NSRect(x: 0, y: 0, width: 336, height: 156),
             styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
-            defer: false
+            defer: true
         )
         pPanel.allowKeyFocus = false
         pPanel.becomesKeyOnlyIfNeeded = true
         pPanel.isFloatingPanel = true
         pPanel.hidesOnDeactivate = false
         pPanel.level = NSPanel.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
-        pPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        pPanel.collectionBehavior = [.moveToActiveSpace]
         pPanel.backgroundColor = .clear
         pPanel.isOpaque = false
         pPanel.hasShadow = true
-        pPanel.ignoresMouseEvents = false
+        pPanel.ignoresMouseEvents = true
         pPanel.contentView = popoverHosting
         self.popoverPanel = pPanel
     }
 
     func setPopoverKeyFocusAllowed(_ allowed: Bool) {
+        isPopoverKeyFocusAllowed = allowed
         popoverPanel?.allowKeyFocus = allowed
         if allowed {
             popoverPanel?.makeKey()
@@ -135,9 +137,10 @@ final class MailInlineOverlayController: ObservableObject {
                 MailIntegrationService.shared.$mailWindowFrame,
                 SettingsManager.shared.$showFloatingPill
             )
-            .receive(on: RunLoop.main)
             .sink { [weak self] _, _, _, _ in
-                self?.refreshOverlay()
+                DispatchQueue.main.async {
+                    self?.refreshOverlay()
+                }
             }
             .store(in: &cancellables)
     }
@@ -179,7 +182,9 @@ final class MailInlineOverlayController: ObservableObject {
         if isPinnedByPill {
             isPinnedByPill = false
         }
+        isPopoverKeyFocusAllowed = false
         popoverPanel?.allowKeyFocus = false
+        popoverPanel?.ignoresMouseEvents = true
         popoverPanel?.orderOut(nil)
         isPopoverOrderedFront = false
     }
@@ -281,6 +286,12 @@ final class MailInlineOverlayController: ObservableObject {
     }
 
     private func checkMouseHover() {
+        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.mail" || isPopoverKeyFocusAllowed else {
+            if isPopoverVisible {
+                hidePopover()
+            }
+            return
+        }
         guard let snap = snapshot, !snap.locatedIssues.isEmpty else { return }
         let mouseLoc = NSEvent.mouseLocation
 
@@ -324,6 +335,7 @@ final class MailInlineOverlayController: ObservableObject {
               MailIntegrationService.shared.isMailFrontmost,
               let mailRect = MailIntegrationService.shared.mailWindowFrame,
               !issues.isEmpty else {
+            pPanel.ignoresMouseEvents = true
             pPanel.orderOut(nil)
             isPopoverOrderedFront = false
             return
@@ -353,6 +365,7 @@ final class MailInlineOverlayController: ObservableObject {
             if pPanel.frame != targetFrame {
                 pPanel.setFrame(targetFrame, display: true)
             }
+            pPanel.ignoresMouseEvents = false
             if !isPopoverOrderedFront {
                 pPanel.orderFrontRegardless()
                 isPopoverOrderedFront = true
@@ -365,6 +378,7 @@ final class MailInlineOverlayController: ObservableObject {
             if pPanel.frame != targetFrame {
                 pPanel.setFrame(targetFrame, display: true)
             }
+            pPanel.ignoresMouseEvents = false
             if !isPopoverOrderedFront {
                 pPanel.orderFrontRegardless()
                 isPopoverOrderedFront = true
