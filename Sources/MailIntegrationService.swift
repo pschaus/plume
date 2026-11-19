@@ -608,13 +608,13 @@ final class MailIntegrationService: ObservableObject {
     @Published var isMailFrontmost: Bool = false
     @Published var mailWindowFrame: CGRect? = nil
     @Published var lastCapturedMailText: String = ""
+    var isInlinePopoverKeyFocusAllowed: Bool = false
 
     private var monitorTimer: Timer?
     private var lastActiveComposeQuartzFrame: CGRect? = nil
 
     private init() {
         ensureMailAntiOupsDoesNotBlockSend()
-        refreshStatus()
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
@@ -681,6 +681,7 @@ final class MailIntegrationService: ObservableObject {
     }
 
     func startMonitoring(onMailTextChanged: @escaping @MainActor @Sendable (String) -> Void) {
+        refreshStatus()
         monitorTimer?.invalidate()
         monitorTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -714,7 +715,7 @@ final class MailIntegrationService: ObservableObject {
         let frontApp = NSWorkspace.shared.frontmostApplication
         let isEditingInlinePopover = (
             frontApp?.bundleIdentifier == Bundle.main.bundleIdentifier &&
-            MailInlineOverlayController.shared.isPopoverKeyFocusAllowed &&
+            isInlinePopoverKeyFocusAllowed &&
             mailApp != nil
         )
         let newFrontmost = (frontApp?.bundleIdentifier == "com.apple.mail") || isEditingInlinePopover

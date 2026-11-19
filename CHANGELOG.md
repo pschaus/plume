@@ -5,6 +5,14 @@ All notable changes to **Plume** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-11-19
+
+### 🐛 Bug Fixes (FR / EN)
+- **FR** :
+  - 🐛 **Correction d'un crash au démarrage (`EXC_BREAKPOINT` / verrou récursif `libdispatch`)** : Corrige un cycle d'initialisation récursif entre les singletons `MailIntegrationService.shared` et `MailInlineOverlayController.shared` lorsque Plume est lancé au premier plan (merci à Leandro pour le rapport et le diagnostic).
+- **EN**:
+  - 🐛 **Fixed Launch Crash (`EXC_BREAKPOINT` / `libdispatch` Recursive Lock)**: Resolved a recursive singleton initialization cycle between `MailIntegrationService.shared` and `MailInlineOverlayController.shared` when launching Plume in the foreground (thanks to Leandro for the report and diagnosis).
+
 ## [1.1.1] - 2026-11-10
 
 ### 🐛 Bug Fixes (FR / EN)

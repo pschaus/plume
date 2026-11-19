@@ -110,6 +110,7 @@ final class MailInlineOverlayController: ObservableObject {
 
     func setPopoverKeyFocusAllowed(_ allowed: Bool) {
         isPopoverKeyFocusAllowed = allowed
+        MailIntegrationService.shared.isInlinePopoverKeyFocusAllowed = allowed
         popoverPanel?.allowKeyFocus = allowed
         if allowed {
             popoverPanel?.makeKey()
