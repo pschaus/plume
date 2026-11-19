@@ -1,0 +1,11 @@
+{
+  "version": "1.1.2",
+  "name": "Plume v1.1.2",
+  "title": "Plume v1.1.2",
+  "published_at": "2026-11-19T16:03:45.000Z",
+  "notes": "### 🐛 Bug Fixes (FR / EN)\n- **FR** :\n  - 🐛 **Correction d'un crash au démarrage (`EXC_BREAKPOINT` / verrou récursif `libdispatch`)** : Corrige un cycle d'initialisation récursif entre les singletons `MailIntegrationService.shared` et `MailInlineOverlayController.shared` lorsque Plume est lancé au premier plan (merci à Leandro pour le rapport et le diagnostic).\n- **EN**:\n  - 🐛 **Fixed Launch Crash (`EXC_BREAKPOINT` / `libdispatch` Recursive Lock)**: Resolved a recursive singleton initialization cycle between `MailIntegrationService.shared` and `MailInlineOverlayController.shared` when launching Plume in the foreground (thanks to Leandro for the report and diagnosis).",
+  "html_url": "https://github.com/pschaus/plume/releases/tag/v1.1.2",
+  "assets": {
+    "macos": "https://github.com/pschaus/plume/releases/latest/download/Plume_1.1.2_universal.dmg"
+  }
+}
